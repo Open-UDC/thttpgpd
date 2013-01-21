@@ -158,7 +158,7 @@ typedef struct {
 #define METHOD_UNKNOWN 0
 #define METHOD_GET 1
 #define METHOD_HEAD 2
-#define METHOD_POST 3
+#define METHOD_POST 4
 
 /* States for checked_state. */
 #define CHST_FIRSTWORD 0
@@ -232,7 +232,7 @@ extern int httpd_got_request( httpd_conn* hc );
 extern int httpd_parse_request( httpd_conn* hc );
 
 
-/*! send_mime write HTTP header inside the hc's response buffer
+/*! send_mime write HTTP header inside the hc's response buffer, and make_log_entry().
  */
 extern void send_mime( httpd_conn* hc, int status, char* title, char* encodings, char* extraheads, char* type, off_t length, time_t mod );
 

@@ -151,8 +151,9 @@ static void figure_mime( httpd_conn* hc );
 static void cgi_kill2( ClientData client_data, struct timeval* nowP );
 static void cgi_kill( ClientData client_data, struct timeval* nowP );
 #endif /* CGI_TIMELIMIT */
+static int launch_process(void (*funct) (httpd_conn* ), httpd_conn* hc, int methods, char * fname);
 #ifdef GENERATE_INDEXES
-static int ls( httpd_conn* hc );
+static void ls( httpd_conn* hc );
 #endif /* GENERATE_INDEXES */
 static char* build_env( char* fmt, char* arg );
 static char** make_envp( httpd_conn* hc );
@@ -162,7 +163,7 @@ static ssize_t fp2fd_gpg_data_rd_cb(struct fp2fd_gpg_data_handle * handle, void 
 static void gpg_data_release_cb(void *handle);
 static void cgi_child( httpd_conn* hc );
 static int cgi( httpd_conn* hc );
-static void make_log_entry(const httpd_conn* hc, struct timeval* nowP, int status);
+static void make_log_entry(const httpd_conn* hc, time_t now, int status);
 static int sockaddr_check( httpd_sockaddr* saP );
 static size_t sockaddr_len( httpd_sockaddr* saP );
 
@@ -459,6 +460,7 @@ char* httpd_err408form =
 
 char * err411title = "Length Required";
 char * err413title = "Request Entity Too Large";
+char * err415title = "Unsupported Media Type";
 
 char* err500title = "Internal Error";
 char* err500form =
@@ -537,8 +539,6 @@ send_mime( httpd_conn* hc, int status, char* title, char* encodings, char* extra
 	char buf[1000];
 	int partial_content;
 
-	make_log_entry( hc, NULL, status);
-	hc->bfield |= HC_LOG_DONE;
 
 	hc->status = status;
 	hc->bytes_to_send = length;
@@ -605,6 +605,9 @@ send_mime( httpd_conn* hc, int status, char* title, char* encodings, char* extra
 			add_response( hc, extraheads );
 		add_response( hc, "\015\012" );
 		}
+
+	make_log_entry( hc, now, status);
+	hc->bfield |= HC_LOG_DONE;
 	}
 
 
@@ -1372,7 +1375,7 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 	hc->checked_state = CHST_FIRSTWORD;
 	hc->method = METHOD_UNKNOWN;
 	hc->status = 0;
-	hc->bytes_to_send = 0;
+	hc->bytes_to_send = -1;
 	hc->bytes_sent = 0;
 	hc->encodedurl = "";
 	hc->decodedurl[0] = '\0';
@@ -2082,8 +2085,6 @@ de_dotdot( char* file )
 void
 httpd_close_conn( httpd_conn* hc, struct timeval* nowP )
 	{
-	if (! (hc->bfield & HC_LOG_DONE) )
-		make_log_entry( hc, nowP , hc->status);
 
 	if ( hc->file_address != (char*) 0 )
 		{
@@ -2296,14 +2297,6 @@ cgi_kill( ClientData client_data, struct timeval* nowP )
 	}
 #endif /* CGI_TIMELIMIT */
 
-
-#ifdef GENERATE_INDEXES
-
-/* qsort comparison routine */
-static int name_compare(char ** a, char ** b) {
-	return strcmp( *a, *b );
-}
-
 /*! drop_child should by call by the parent when a child will handle the request */
 void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 	ClientData client_data;
@@ -2344,9 +2337,54 @@ void child_r_start(httpd_conn* hc) {
 #endif /* HAVE_SIGSET */
 }
 
-static int
-ls( httpd_conn* hc )
-	{
+/*
+ * \return a negative number to finish the connection, or 0 if it have fork.
+ */
+static int launch_process(void (*funct) (httpd_conn* ), httpd_conn* hc, int methods, char * fname) {
+	int r;
+
+	if ( hc->method == METHOD_HEAD ) {
+		send_mime(
+			hc, 200, ok200title, "", "", "text/html; charset=%s", (off_t) -1,
+			hc->sb.st_mtime );
+		return(-1);
+	} else if ( ! (hc->method & methods) ) {
+		httpd_send_err(
+			hc, 501, err501title, "", err501form, httpd_method_str( hc->method ) );
+		return(-1);
+	}
+
+	/* To much forks already running */
+	if ( hc->hs->cgi_limit != 0 && hc->hs->cgi_count >= hc->hs->cgi_limit ) {
+		httpd_send_err(hc, 503, httpd_err503title, "", httpd_err503form,hc->encodedurl );
+		return(-1);
+	}
+	r = fork( );
+	if ( r < 0 ) {
+		httpd_send_err(hc, 500, err500title, "", err500form, "f" );
+		return(-1);
+	}
+	if ( r > 0 ) {
+		/* Parent process. */
+		drop_child(fname,r,hc);
+		return(0);
+	}
+
+	/* Child process. */
+	child_r_start(hc);
+	funct(hc);
+	/* If the child process forget to exit... : */
+	exit(-2);
+}
+
+#ifdef GENERATE_INDEXES
+
+/* qsort comparison routine */
+static int name_compare(char ** a, char ** b) {
+	return strcmp( *a, *b );
+}
+
+static void ls(httpd_conn* hc) {
 	DIR* dirp;
 	struct dirent* de;
 	int namlen;
@@ -2361,7 +2399,7 @@ ls( httpd_conn* hc )
 	static char* encrname;
 	static size_t maxencrname = 0;
 	FILE* fp;
-	int i, r;
+	int i;
 	struct stat sb;
 	struct stat lsb;
 	char modestr[20];
@@ -2373,65 +2411,33 @@ ls( httpd_conn* hc )
 	char* timestr;
 
 	dirp = opendir( hc->expnfilename );
-	if ( dirp == (DIR*) 0 )
-		{
+	if ( dirp == (DIR*) 0 ) {
 		syslog( LOG_ERR, "opendir %.80s - %m", hc->expnfilename );
 		httpd_send_err( hc, 404, err404title, "", err404form, hc->encodedurl );
-		return -1;
-		}
+		exit(1);
+	}
 
-	if ( hc->method == METHOD_HEAD )
+	send_mime(
+		hc, 200, ok200title, "", "", "text/html; charset=%s",
+		(off_t) -1, hc->sb.st_mtime );
+	httpd_write_response( hc );
+
+	/* Open a stdio stream so that we can use fprintf, which is more
+	** efficient than a bunch of separate write()s.  We don't have
+	** to worry about double closes or file descriptor leaks cause
+	** we're in a subprocess.
+	*/
+	fp = fdopen( hc->conn_fd, "w" );
+	if ( fp == (FILE*) 0 )
 		{
+		syslog( LOG_ERR, "fdopen - %m" );
+		httpd_send_err(
+			hc, 500, err500title, "", err500form, hc->encodedurl );
 		closedir( dirp );
-		send_mime(
-			hc, 200, ok200title, "", "", "text/html; charset=%s", (off_t) -1,
-			hc->sb.st_mtime );
+		exit( 1 );
 		}
-	else if ( hc->method == METHOD_GET )
-		{
-		if ( hc->hs->cgi_limit != 0 && hc->hs->cgi_count >= hc->hs->cgi_limit )
-			{
-			closedir( dirp );
-			httpd_send_err(
-				hc, 503, httpd_err503title, "", httpd_err503form,
-				hc->encodedurl );
-			return -1;
-			}
-		r = fork( );
-		if ( r < 0 )
-			{
-			syslog( LOG_ERR, "fork - %m" );
-			closedir( dirp );
-			httpd_send_err(
-				hc, 500, err500title, "", err500form, hc->encodedurl );
-			return -1;
-			}
-		if ( r == 0 )
-			{
-			/* Child process. */
-			child_r_start(hc);
 
-			send_mime(
-				hc, 200, ok200title, "", "", "text/html; charset=%s",
-				(off_t) -1, hc->sb.st_mtime );
-			httpd_write_response( hc );
-
-			/* Open a stdio stream so that we can use fprintf, which is more
-			** efficient than a bunch of separate write()s.  We don't have
-			** to worry about double closes or file descriptor leaks cause
-			** we're in a subprocess.
-			*/
-			fp = fdopen( hc->conn_fd, "w" );
-			if ( fp == (FILE*) 0 )
-				{
-				syslog( LOG_ERR, "fdopen - %m" );
-				httpd_send_err(
-					hc, 500, err500title, "", err500form, hc->encodedurl );
-				closedir( dirp );
-				exit( 1 );
-				}
-
-			(void) fprintf( fp, "\
+	(void) fprintf( fp, "\
 <HTML>\n\
 <HEAD><TITLE>Index of %.80s</TITLE></HEAD>\n\
 <BODY BGCOLOR=\"#99cc99\" TEXT=\"#000000\" LINK=\"#2020ff\" VLINK=\"#4040cc\">\n\
@@ -2439,178 +2445,163 @@ ls( httpd_conn* hc )
 <PRE>\n\
 mode  links  bytes  last-changed  name\n\
 <HR>",
-				hc->encodedurl, hc->encodedurl );
+		hc->encodedurl, hc->encodedurl );
 
-			/* Read in names. */
-			nnames = 0;
-			while ( ( de = readdir( dirp ) ) != 0 )	 /* dirent or direct */
+	/* Read in names. */
+	nnames = 0;
+	while ( ( de = readdir( dirp ) ) != 0 )	 /* dirent or direct */
+		{
+		if ( nnames >= maxnames )
+			{
+			if ( maxnames == 0 )
 				{
-				if ( nnames >= maxnames )
-					{
-					if ( maxnames == 0 )
-						{
-						maxnames = 100;
-						names = NEW( char, maxnames * ( MAXPATHLEN + 1 ) );
-						nameptrs = NEW( char*, maxnames );
-						}
-					else
-						{
-						maxnames *= 2;
-						names = RENEW( names, char, maxnames * ( MAXPATHLEN + 1 ) );
-						nameptrs = RENEW( nameptrs, char*, maxnames );
-						}
-					if ( names == (char*) 0 || nameptrs == (char**) 0 )
-						{
-						syslog( LOG_ERR, "out of memory reallocating directory names" );
-						exit( 1 );
-						}
-					for ( i = 0; i < maxnames; ++i )
-						nameptrs[i] = &names[i * ( MAXPATHLEN + 1 )];
-					}
-				namlen = NAMLEN(de);
-				(void) strncpy( nameptrs[nnames], de->d_name, namlen );
-				nameptrs[nnames][namlen] = '\0';
-				++nnames;
+				maxnames = 100;
+				names = NEW( char, maxnames * ( MAXPATHLEN + 1 ) );
+				nameptrs = NEW( char*, maxnames );
 				}
-			closedir( dirp );
-
-			/* Sort the names. */
-			qsort( nameptrs, nnames, sizeof(*nameptrs),(int(*)(const void *, const void *)) name_compare );
-
-			/* Generate output. */
-			for ( i = 0; i < nnames; ++i )
+			else
 				{
-				httpd_realloc_str(
-					&name, &maxname,
-					strlen( hc->expnfilename ) + 1 + strlen( nameptrs[i] ) );
-				httpd_realloc_str(
-					&rname, &maxrname,
-					strlen( hc->origfilename ) + 1 + strlen( nameptrs[i] ) );
-				if ( hc->expnfilename[0] == '\0' ||
-					 strcmp( hc->expnfilename, "." ) == 0 )
-					{
-					(void) strcpy( name, nameptrs[i] );
-					(void) strcpy( rname, nameptrs[i] );
-					}
-				else
-					{
-					(void) snprintf( name, maxname,
-						"%s/%s", hc->expnfilename, nameptrs[i] );
-					if ( strcmp( hc->origfilename, "." ) == 0 )
-						(void) snprintf( rname, maxrname,
-							"%s", nameptrs[i] );
-					else
-						(void) snprintf( rname, maxrname,
-							"%s%s", hc->origfilename, nameptrs[i] );
-					}
-				httpd_realloc_str(
-					&encrname, &maxencrname, 3 * strlen( rname ) + 1 );
-				strencode( encrname, maxencrname, rname );
-
-				if ( stat( name, &sb ) < 0 || lstat( name, &lsb ) < 0 )
-					continue;
-
-				linkprefix = "";
-				link[0] = '\0';
-				/* Break down mode word.  First the file type. */
-				switch ( lsb.st_mode & S_IFMT )
-					{
-					case S_IFIFO:  modestr[0] = 'p'; break;
-					case S_IFCHR:  modestr[0] = 'c'; break;
-					case S_IFDIR:  modestr[0] = 'd'; break;
-					case S_IFBLK:  modestr[0] = 'b'; break;
-					case S_IFREG:  modestr[0] = '-'; break;
-					case S_IFSOCK: modestr[0] = 's'; break;
-					case S_IFLNK:  modestr[0] = 'l';
-					linklen = readlink( name, link, sizeof(link) - 1 );
-					if ( linklen != -1 )
-						{
-						link[linklen] = '\0';
-						linkprefix = " -&gt; ";
-						}
-					break;
-					default:	   modestr[0] = '?'; break;
-					}
-				/* Now the world permissions.  Owner and group permissions
-				** are not of interest to web clients.
-				*/
-				modestr[1] = ( lsb.st_mode & S_IROTH ) ? 'r' : '-';
-				modestr[2] = ( lsb.st_mode & S_IWOTH ) ? 'w' : '-';
-				modestr[3] = ( lsb.st_mode & S_IXOTH ) ? 'x' : '-';
-				modestr[4] = '\0';
-
-				/* We also leave out the owner and group name, they are
-				** also not of interest to web clients.  Plus if we're
-				** running under chroot(), they would require a copy
-				** of /etc/passwd and /etc/group, which we want to avoid.
-				*/
-
-				/* Get time string. */
-				now = time( (time_t*) 0 );
-				timestr = ctime( &lsb.st_mtime );
-				timestr[ 0] = timestr[ 4];
-				timestr[ 1] = timestr[ 5];
-				timestr[ 2] = timestr[ 6];
-				timestr[ 3] = ' ';
-				timestr[ 4] = timestr[ 8];
-				timestr[ 5] = timestr[ 9];
-				timestr[ 6] = ' ';
-				if ( now - lsb.st_mtime > 60*60*24*182 )		/* 1/2 year */
-					{
-					timestr[ 7] = ' ';
-					timestr[ 8] = timestr[20];
-					timestr[ 9] = timestr[21];
-					timestr[10] = timestr[22];
-					timestr[11] = timestr[23];
-					}
-				else
-					{
-					timestr[ 7] = timestr[11];
-					timestr[ 8] = timestr[12];
-					timestr[ 9] = ':';
-					timestr[10] = timestr[14];
-					timestr[11] = timestr[15];
-					}
-				timestr[12] = '\0';
-
-				/* The ls -F file class. */
-				switch ( sb.st_mode & S_IFMT )
-					{
-					case S_IFDIR:  fileclass = "/"; break;
-					case S_IFSOCK: fileclass = "="; break;
-					case S_IFLNK:  fileclass = "@"; break;
-					default:
-					fileclass = ( sb.st_mode & S_IXOTH ) ? "*" : "";
-					break;
-					}
-
-				/* And print. */
-				(void)  fprintf( fp,
-				   "%s %3ld  %10lld  %s  <A HREF=\"/%.500s%s\">%.80s</A>%s%s%s\n",
-					modestr, (long) lsb.st_nlink, (int64_t) lsb.st_size,
-					timestr, encrname, S_ISDIR(sb.st_mode) ? "/" : "",
-					nameptrs[i], linkprefix, link, fileclass );
+				maxnames *= 2;
+				names = RENEW( names, char, maxnames * ( MAXPATHLEN + 1 ) );
+				nameptrs = RENEW( nameptrs, char*, maxnames );
 				}
+			if ( names == (char*) 0 || nameptrs == (char**) 0 )
+				{
+				syslog( LOG_ERR, "out of memory reallocating directory names" );
+				exit( 1 );
+				}
+			for ( i = 0; i < maxnames; ++i )
+				nameptrs[i] = &names[i * ( MAXPATHLEN + 1 )];
+			}
+		namlen = NAMLEN(de);
+		(void) strncpy( nameptrs[nnames], de->d_name, namlen );
+		nameptrs[nnames][namlen] = '\0';
+		++nnames;
+		}
+	closedir( dirp );
 
-			(void) fprintf( fp, "</PRE></BODY>\n</HTML>\n" );
-			(void) fclose( fp );
-			exit( 0 );
+	/* Sort the names. */
+	qsort( nameptrs, nnames, sizeof(*nameptrs),(int(*)(const void *, const void *)) name_compare );
+
+	/* Generate output. */
+	for ( i = 0; i < nnames; ++i )
+		{
+		httpd_realloc_str(
+			&name, &maxname,
+			strlen( hc->expnfilename ) + 1 + strlen( nameptrs[i] ) );
+		httpd_realloc_str(
+			&rname, &maxrname,
+			strlen( hc->origfilename ) + 1 + strlen( nameptrs[i] ) );
+		if ( hc->expnfilename[0] == '\0' ||
+			 strcmp( hc->expnfilename, "." ) == 0 )
+			{
+			(void) strcpy( name, nameptrs[i] );
+			(void) strcpy( rname, nameptrs[i] );
+			}
+		else
+			{
+			(void) snprintf( name, maxname,
+				"%s/%s", hc->expnfilename, nameptrs[i] );
+			if ( strcmp( hc->origfilename, "." ) == 0 )
+				(void) snprintf( rname, maxrname,
+					"%s", nameptrs[i] );
+			else
+				(void) snprintf( rname, maxrname,
+					"%s%s", hc->origfilename, nameptrs[i] );
+			}
+		httpd_realloc_str(
+			&encrname, &maxencrname, 3 * strlen( rname ) + 1 );
+		strencode( encrname, maxencrname, rname );
+
+		if ( stat( name, &sb ) < 0 || lstat( name, &lsb ) < 0 )
+			continue;
+
+		linkprefix = "";
+		link[0] = '\0';
+		/* Break down mode word.  First the file type. */
+		switch ( lsb.st_mode & S_IFMT )
+			{
+			case S_IFIFO:  modestr[0] = 'p'; break;
+			case S_IFCHR:  modestr[0] = 'c'; break;
+			case S_IFDIR:  modestr[0] = 'd'; break;
+			case S_IFBLK:  modestr[0] = 'b'; break;
+			case S_IFREG:  modestr[0] = '-'; break;
+			case S_IFSOCK: modestr[0] = 's'; break;
+			case S_IFLNK:  modestr[0] = 'l';
+			linklen = readlink( name, link, sizeof(link) - 1 );
+			if ( linklen != -1 )
+				{
+				link[linklen] = '\0';
+				linkprefix = " -&gt; ";
+				}
+			break;
+			default:	   modestr[0] = '?'; break;
+			}
+		/* Now the world permissions.  Owner and group permissions
+		** are not of interest to web clients.
+		*/
+		modestr[1] = ( lsb.st_mode & S_IROTH ) ? 'r' : '-';
+		modestr[2] = ( lsb.st_mode & S_IWOTH ) ? 'w' : '-';
+		modestr[3] = ( lsb.st_mode & S_IXOTH ) ? 'x' : '-';
+		modestr[4] = '\0';
+
+		/* We also leave out the owner and group name, they are
+		** also not of interest to web clients.  Plus if we're
+		** running under chroot(), they would require a copy
+		** of /etc/passwd and /etc/group, which we want to avoid.
+		*/
+
+		/* Get time string. */
+		now = time( (time_t*) 0 );
+		timestr = ctime( &lsb.st_mtime );
+		timestr[ 0] = timestr[ 4];
+		timestr[ 1] = timestr[ 5];
+		timestr[ 2] = timestr[ 6];
+		timestr[ 3] = ' ';
+		timestr[ 4] = timestr[ 8];
+		timestr[ 5] = timestr[ 9];
+		timestr[ 6] = ' ';
+		if ( now - lsb.st_mtime > 60*60*24*182 )		/* 1/2 year */
+			{
+			timestr[ 7] = ' ';
+			timestr[ 8] = timestr[20];
+			timestr[ 9] = timestr[21];
+			timestr[10] = timestr[22];
+			timestr[11] = timestr[23];
+			}
+		else
+			{
+			timestr[ 7] = timestr[11];
+			timestr[ 8] = timestr[12];
+			timestr[ 9] = ':';
+			timestr[10] = timestr[14];
+			timestr[11] = timestr[15];
+			}
+		timestr[12] = '\0';
+
+		/* The ls -F file class. */
+		switch ( sb.st_mode & S_IFMT )
+			{
+			case S_IFDIR:  fileclass = "/"; break;
+			case S_IFSOCK: fileclass = "="; break;
+			case S_IFLNK:  fileclass = "@"; break;
+			default:
+			fileclass = ( sb.st_mode & S_IXOTH ) ? "*" : "";
+			break;
 			}
 
-		/* Parent process. */
-		closedir( dirp );
-		drop_child("indexing",r,hc);
-		}
-	else
-		{
-		closedir( dirp );
-		httpd_send_err(
-			hc, 501, err501title, "", err501form, httpd_method_str( hc->method ) );
-		return -1;
+		/* And print. */
+		(void)  fprintf( fp,
+		   "%s %3ld  %10lld  %s  <A HREF=\"/%.500s%s\">%.80s</A>%s%s%s\n",
+			modestr, (long) lsb.st_nlink, (int64_t) lsb.st_size,
+			timestr, encrname, S_ISDIR(sb.st_mode) ? "/" : "",
+			nameptrs[i], linkprefix, link, fileclass );
 		}
 
-	return 0;
-	}
+	(void) fprintf( fp, "</PRE></BODY>\n</HTML>\n" );
+	(void) fclose( fp );
+	exit( 0 );
+}
 
 #endif /* GENERATE_INDEXES */
 
@@ -2925,9 +2916,7 @@ void httpd_parse_resp(interpose_args_t * args) {
 #define HTTP_MAX_HEADERS 40
 
 #define HTTPD_PARSE_RESP_RETURN(code) { \
-	/* log if not already done */ \
-	if (! (hc->bfield & HC_LOG_DONE) ) \
-		make_log_entry( hc, NULL, (code)>0?code:status); \
+	make_log_entry( hc, 0, (code)>0?code:status); \
 	(fp?fclose(fp):close(args->rfd)); \
 	close(args->wfd); \
 	free(buf); \
@@ -3315,7 +3304,7 @@ cgi_child( httpd_conn* hc ) {
 		exit(EXIT_FAILURE);
 	} else if (!interpose_output)
 		/* Log now as there is no output interposer to do it */
-		make_log_entry(hc, NULL, 200);
+		make_log_entry(hc, 0, 200);
 
 	if ( interpose_input || interpose_output ) {
 		/* we will need to create an interposer process */
@@ -3430,6 +3419,7 @@ cgi( httpd_conn* hc )
 
 	if ( hc->method == METHOD_GET || hc->method == METHOD_POST )
 		{
+		/* To much forks already running */
 		if ( hc->hs->cgi_limit != 0 && hc->hs->cgi_count >= hc->hs->cgi_limit )
 			{
 			httpd_send_err(
@@ -3601,7 +3591,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 #endif /* AUTH_FILE */
 
 		/* Ok, generate an index. */
-		return ls( hc );
+		return launch_process(ls, hc, METHOD_GET, "indexing");
 #else /* GENERATE_INDEXES */
 		syslog(
 			LOG_INFO, "%.80s URL \"%.80s\" tried to index a directory",
@@ -3809,14 +3799,12 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 }
 
 
-static void
-make_log_entry(const httpd_conn* hc, struct timeval* nowP, int status)
-	{
+static void make_log_entry(const httpd_conn* hc, time_t now, int status) {
 	char* ru;
 	char url[305];
 	char bytes[40];
 
-	if ( hc->hs->bfield & HS_NO_LOG )
+	if ( hc->hs->bfield & HS_NO_LOG || hc->bfield & HC_LOG_DONE )
 		return;
 
 	/* This is straight CERN Combined Log Format - the only tweak
@@ -3833,16 +3821,13 @@ make_log_entry(const httpd_conn* hc, struct timeval* nowP, int status)
 	/* Format the url. */
 	(void) snprintf( url, sizeof(url),"%.200s", hc->encodedurl );
 	/* Format the bytes. */
-	if ( hc->bytes_sent >= 0 )
-		(void) snprintf(
-			bytes, sizeof(bytes), "%lld", (int64_t) hc->bytes_sent );
+	if ( hc->bytes_to_send >= 0 )
+		(void) snprintf( bytes, sizeof(bytes), "%lld", (int64_t) hc->bytes_to_send );
 	else
 		(void) strcpy( bytes, "-" );
 
 	/* Logfile or syslog? */
-	if ( hc->hs->logfp != (FILE*) 0 )
-		{
-		time_t now;
+	if ( hc->hs->logfp != (FILE*) 0 ) {
 		struct tm* t;
 		const char* cernfmt_nozone = "%d/%b/%Y:%H:%M:%S";
 		char date_nozone[100];
@@ -3851,9 +3836,7 @@ make_log_entry(const httpd_conn* hc, struct timeval* nowP, int status)
 		char date[100];
 
 		/* Get the current time, if necessary. */
-		if ( nowP != (struct timeval*) 0 )
-			now = nowP->tv_sec;
-		else
+		if ( now == (time_t) 0 )
 			now = time( (time_t*) 0 );
 		/* Format the time, forcing a numeric timezone (some log analyzers
 		** are stoooopid about this).
@@ -3868,11 +3851,10 @@ make_log_entry(const httpd_conn* hc, struct timeval* nowP, int status)
 #endif
 		if ( zone >= 0 )
 			sign = '+';
-		else
-			{
+		else {
 			sign = '-';
 			zone = -zone;
-			}
+		}
 		zone = ( zone / 60 ) * 100 + zone % 60;
 		(void) snprintf( date, sizeof(date),
 			"%s %c%04d", date_nozone, sign, zone );
@@ -3885,14 +3867,14 @@ make_log_entry(const httpd_conn* hc, struct timeval* nowP, int status)
 #ifdef FLUSH_LOG_EVERY_TIME
 		(void) fflush( hc->hs->logfp );
 #endif
-		}
-	else
+	} else
 		syslog( LOG_INFO,
 			"%.80s - %.80s \"%.80s %.200s %.80s\" %d %s \"%.200s\" \"%.200s\"",
 			hc->client_addr, ru,
 			httpd_method_str( hc->method ), url, hc->protocol,
 			status, bytes, hc->referer, hc->useragent );
-	}
+
+}
 
 char*
 httpd_ntoa( httpd_sockaddr* saP ) {
