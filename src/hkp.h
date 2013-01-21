@@ -14,11 +14,11 @@
 /*! hkp_add permit to add a new public key on the validation node.
  * \return -1 if not forking (inconsistant parameters, HEAD, GET..), or 0 if fork.
  */
-int hkp_add( httpd_conn* hc );
+void hkp_add( httpd_conn* hc );
 
 /*! hkp_lookup permit to search and get a public certificate from the validation node.
  * \return -1 if not forking (inconsistant parameters, HEAD, POST..), or 0 if fork.
  */
-int hkp_lookup( httpd_conn* hc );
+void hkp_lookup( httpd_conn* hc );
 
 #endif /* _HKP_H_ */

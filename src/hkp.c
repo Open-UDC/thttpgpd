@@ -27,14 +27,12 @@
 #define PKSADDLOG(...) while (0)
 #endif
 
-
 /* struct passed to gpgdata4export_cb */
 struct gpgdata4export_handle {
 	httpd_conn* hc;
 	int nsearchs;
 	char ** searchs;
 }; 
-
 
 static int export_start=0; /* set to 1 once by gpgdata4export_cb(...) */
 
@@ -60,7 +58,7 @@ static char * get_matching_comment(const regex_t *preg,const gpgme_key_t gkey) {
 }
 #endif /* CHECK_UDID2 */
 
-int hkp_add( httpd_conn* hc ) {
+void hkp_add( httpd_conn* hc ) {
 #define INPUT_MAX (1<<17) /* 1<<17 = 128ko */
 	size_t c;
 	ssize_t r;
@@ -78,45 +76,14 @@ int hkp_add( httpd_conn* hc ) {
 	char * buff;
 	int buffsize, rcode=200, mergeonly=(hc->hs->bfield & HS_PKS_ADD_MERGE_ONLY);
 
-
-	if ( hc->method == METHOD_HEAD ) {
-		send_mime(
-			hc, 200, ok200title, "", "", "text/html; charset=%s", (off_t) -1,
-			hc->sb.st_mtime );
-		return(-1);
-	} else if ( hc->method != METHOD_POST ) {
-		httpd_send_err(
-			hc, 501, err501title, "", err501form, httpd_method_str( hc->method ) );
-		return(-1);
-	}
-
-
 	if (hc->contentlength < 12) {
 		httpd_send_err(hc, 411, err411title, "", "Content-Length is absent or too short (%.80s)", "12");
-		return(-1);
+		exit(EXIT_FAILURE);
 	}
 	if ( hc->contentlength >= INPUT_MAX ) {
 		httpd_send_err(hc, 413, err413title, "", "your POST is too big", "");
-		return(-1);
+		exit(EXIT_FAILURE);
 	}
-
-	/* To much forks already running */
-	if ( hc->hs->cgi_limit != 0 && hc->hs->cgi_count >= hc->hs->cgi_limit ) {
-		httpd_send_err(hc, 503, httpd_err503title, "", httpd_err503form,hc->encodedurl );
-		return(-1);
-	}
-	r = fork( );
-	if ( r < 0 ) {
-		httpd_send_err(hc, 500, err500title, "", err500form, "f" );
-		return(-1);
-	}
-	if ( r > 0 ) {
-		/* Parent process. */
-		drop_child("hkp",r,hc);
-		return(0);
-	}
-	/* Child process. */
-	child_r_start(hc);
 
 	buffsize=hc->contentlength;
 	buff=malloc(buffsize+1);
@@ -267,13 +234,10 @@ static void gpg_data_release_cb(void *handle)
 	    /* must just be present... bug or feature?!? */
 }
 
-/*
- * \return a negative number to finish the connection, or 0 if it have fork.
- */
-int hkp_lookup( httpd_conn* hc ) {
+void hkp_lookup( httpd_conn* hc ) {
 
 #define HKP_MAX_SEARCHS 32
-	int r,i,nsearchs=0,p[2];
+	int i,nsearchs=0,p[2];
 	char * op=(char *)0;
 	char * search[HKP_MAX_SEARCHS+1]={(char *)0};
 	char * searchdec[HKP_MAX_SEARCHS+1]={(char *)0};
@@ -287,40 +251,6 @@ int hkp_lookup( httpd_conn* hc ) {
 	pthread_t tparse;
 	int terrno=-1;
 
-	if ( hc->method == METHOD_HEAD ) {
-		send_mime(
-			hc, 200, ok200title, "", "", "text/html; charset=%s", (off_t) -1,
-			hc->sb.st_mtime );
-		return(-1);
-	} else if ( hc->method != METHOD_GET ) {
-		httpd_send_err(
-			hc, 501, err501title, "", err501form, httpd_method_str( hc->method ) );
-		return(-1);
-	}
-
-	pchar=hc->query;
-	if (! pchar || *pchar == '\0' ) {
-		httpd_send_err(hc, 400, httpd_err400title, "", "Error handling request: there is no query string", "" );
-		return(-1);
-	}
-
-	/* To much forks already running */
-	if ( hc->hs->cgi_limit != 0 && hc->hs->cgi_count >= hc->hs->cgi_limit ) {
-		httpd_send_err(hc, 503, httpd_err503title, "", httpd_err503form,hc->encodedurl );
-		return(-1);
-	}
-	r = fork( );
-	if ( r < 0 ) {
-		httpd_send_err(hc, 500, err500title, "", err500form, "f" );
-		return(-1);
-	}
-	if ( r > 0 ) {
-		/* Parent process. */
-		drop_child("hkp",r,hc);
-		return(0);
-	}
-	/* Child process. */
-	child_r_start(hc);
 #define HKP_LOOKUP_EXIT(code) {\
 	if (terrno == 0) { \
 		close(hc->conn_fd); \
@@ -328,6 +258,12 @@ int hkp_lookup( httpd_conn* hc ) {
 	} \
 	exit(code); \
 }\
+
+	pchar=hc->query;
+	if (! pchar || *pchar == '\0' ) {
+		httpd_send_err(hc, 400, httpd_err400title, "", "Error handling request: there is no query string", "" );
+		exit(EXIT_SUCCESS);
+	}
 
 	while (pchar && *pchar) {
 		if (!strncmp(pchar,"op=",3)) {
@@ -364,24 +300,24 @@ int hkp_lookup( httpd_conn* hc ) {
 			exact=(char *) 0; /* off is default */
 		} else if (!strcmp(exact,"on")) {
 			httpd_send_err(hc, 501, err501title, "", err501form, "exact=on" );
-			exit(1);
+			exit(EXIT_FAILURE);
 		} else {
 			httpd_send_err(hc, 400, httpd_err400title, "", "\"exact\" parameter only take \"on\" or \"off\" as argument.", "" );
-			exit(0);
+			exit(EXIT_SUCCESS);
 		}
 	}
 
 	if ( ! search[0] ) { 
 		/* (mandatory parameter) */
 		httpd_send_err(hc, 400, httpd_err400title, "", "Missing a \"search\" value in the query.</h1></body></html>","");
-		exit(0);
+		exit(EXIT_SUCCESS);
 	} else {
 		for (i=0;i<nsearchs;i++) {
 			if ( (searchdec[i]=malloc(strlen(search[i])*sizeof(char)+1)) ) 
 				strdecode(searchdec[i],search[i]);
 			else {
 				httpd_send_err(hc, 500, err500title, "", err500form, "m" );
-				exit(1);
+				exit(EXIT_FAILURE);
 			}
 		}
 	}

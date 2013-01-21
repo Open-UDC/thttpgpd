@@ -1123,10 +1123,10 @@ static int read_config( char* filename )
 		/* Split line into words. */
 		while ( *cp != '\0' )
 			{
-			/* Find next whitespace. */
-			cp2 = cp + strcspn( cp, " \t\n\r" );
+			/* Find next tab. */
+			cp2 = cp + strcspn( cp, "\t\n\r" );
 			/* Insert EOS and advance next-word pointer. */
-			while ( *cp2 == ' ' || *cp2 == '\t' || *cp2 == '\n' || *cp2 == '\r' )
+			while ( *cp2 == '\t' || *cp2 == '\n' || *cp2 == '\r' )
 				*cp2++ = '\0';
 			/* Split into name and value. */
 			name = cp;

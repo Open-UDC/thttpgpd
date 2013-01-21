@@ -151,6 +151,10 @@ static void figure_mime( httpd_conn* hc );
 static void cgi_kill2( ClientData client_data, struct timeval* nowP );
 static void cgi_kill( ClientData client_data, struct timeval* nowP );
 #endif /* CGI_TIMELIMIT */
+/* drop_child() is called by the parent process when a child will handle the request */
+static void drop_child(const char * type,pid_t pid,httpd_conn* hc);
+/* child_r_start() is called early(first) in the child process which will handle the request */
+static void child_r_start(httpd_conn* hc);
 static int launch_process(void (*funct) (httpd_conn* ), httpd_conn* hc, int methods, char * fname);
 #ifdef GENERATE_INDEXES
 static void ls( httpd_conn* hc );
@@ -2275,7 +2279,7 @@ cgi_kill2( ClientData client_data, struct timeval* nowP )
 
 	pid = (pid_t) client_data.i;
 	if ( kill( pid, SIGKILL ) == 0 )
-		syslog( LOG_ERR, "hard-killed CGI process %d", pid );
+		syslog( LOG_ERR, "hard-killed child process %d", pid );
 	}
 
 static void
@@ -2286,7 +2290,7 @@ cgi_kill( ClientData client_data, struct timeval* nowP )
 	pid = (pid_t) client_data.i;
 	if ( kill( pid, SIGINT ) == 0 )
 		{
-		syslog( LOG_ERR, "killed CGI process %d", pid );
+		syslog( LOG_ERR, "killed child process %d", pid );
 		/* In case this isn't enough, schedule an uncatchable kill. */
 		if ( tmr_create( nowP, cgi_kill2, client_data, 5 * 1000L, 0 ) == (Timer*) 0 )
 			{
@@ -2298,7 +2302,7 @@ cgi_kill( ClientData client_data, struct timeval* nowP )
 #endif /* CGI_TIMELIMIT */
 
 /*! drop_child should by call by the parent when a child will handle the request */
-void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
+static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 	ClientData client_data;
 
 	++hc->hs->cgi_count;
@@ -2321,7 +2325,7 @@ void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 }
 
 /*! child_r_start should be call early by the child handling the request */
-void child_r_start(httpd_conn* hc) {
+static void child_r_start(httpd_conn* hc) {
 	httpd_unlisten( hc->hs );
 	/* we are in a sub-process, turn off no-delay mode. */
 	httpd_clear_ndelay( hc->conn_fd );
@@ -2338,6 +2342,7 @@ void child_r_start(httpd_conn* hc) {
 }
 
 /*
+ * \param methods: accepted HTTP methods (bitwise-or of METHOD_GET or METHOD_POST).
  * \return a negative number to finish the connection, or 0 if it have fork.
  */
 static int launch_process(void (*funct) (httpd_conn* ), httpd_conn* hc, int methods, char * fname) {
@@ -3483,9 +3488,9 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 
 	/* Embedded action(s) on specific url */
 	if ( !strcmp(hc->origfilename,"pks/lookup") )
-		return hkp_lookup(hc);
+		return launch_process(hkp_lookup, hc, METHOD_GET, "hkp");
 	if ( !strcmp(hc->origfilename,"pks/add") )
-		return hkp_add(hc);
+		return launch_process(hkp_add, hc, METHOD_POST, "hkp");
 
 	/* Stat the file. */
 	if ( stat( hc->expnfilename, &hc->sb ) < 0 )
@@ -3694,26 +3699,26 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 #endif /* FORBID_HIDDEN_RESSOURCE */
 #endif /* AUTH_FILE */
 
-	/* Is it world-executable and in the CGI area? */
-	if ( hc->hs->cgi_pattern != (char*) 0 &&
-		 ( hc->sb.st_mode & S_IXOTH ) &&
-		 match( hc->hs->cgi_pattern, hc->expnfilename ) )
-		return cgi( hc );
-
-	/* It's not CGI.  If it's executable or there's pathinfo, someone's
-	** trying to either serve or run a non-CGI file as CGI.   Either case
-	** is prohibited.
+	/* If it's world executable and not in the CGI area, or if there's 
+	** pathinfo, someone's trying to either serve or run a non-CGI
+	** file as CGI.  Either case is prohibited.
 	*/
 	if ( hc->sb.st_mode & S_IXOTH )
-		{
-		syslog(
-			LOG_NOTICE, "%.80s URL \"%.80s\" is executable but isn't CGI",
-			hc->client_addr, hc->encodedurl );
-		httpd_send_err(
-			hc, 403, err403title, "",
-			ERROR_FORM( err403form, "The requested URL '%.80s' resolves to a file which is marked executable but is not a CGI file; retrieving it is forbidden.\n" ),
-			hc->encodedurl );
-		return -1;
+		{	
+		if ( hc->hs->cgi_pattern != (char*) 0 
+		&& match( hc->hs->cgi_pattern, hc->expnfilename ) )
+			return cgi( hc );
+		else
+			{
+			syslog(
+				LOG_NOTICE, "%.80s URL \"%.80s\" is executable but isn't CGI",
+				hc->client_addr, hc->encodedurl );
+			httpd_send_err(
+				hc, 403, err403title, "",
+				ERROR_FORM( err403form, "The requested URL '%.80s' resolves to a file which is marked executable but is not a CGI file; retrieving it is forbidden.\n" ),
+				hc->encodedurl );
+			return -1;
+			}
 		}
 	if ( hc->pathinfo[0] != '\0' )
 		{
