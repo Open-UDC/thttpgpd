@@ -2289,14 +2289,12 @@ cgi_kill( ClientData client_data, struct timeval* nowP )
 
 	pid = (pid_t) client_data.i;
 	if ( kill( pid, SIGINT ) == 0 )
-		{
 		syslog( LOG_ERR, "killed child process %d", pid );
-		/* In case this isn't enough, schedule an uncatchable kill. */
-		if ( tmr_create( nowP, cgi_kill2, client_data, 5 * 1000L, 0 ) == (Timer*) 0 )
-			{
-			syslog( LOG_CRIT, "tmr_create(cgi_kill2) failed" );
-			exit( 1 );
-			}
+	/* In case this isn't enough, schedule an uncatchable kill. */
+	if ( tmr_create( nowP, cgi_kill2, client_data, 5 * 1000L, 0 ) == (Timer*) 0 )
+		{
+		syslog( LOG_CRIT, "tmr_create(cgi_kill2) failed" );
+		exit( 1 );
 		}
 	}
 #endif /* CGI_TIMELIMIT */
@@ -2334,16 +2332,34 @@ static void child_r_start(httpd_conn* hc) {
 	httpd_unlisten( hc->hs );
 	/* we are in a sub-process, turn off no-delay mode. */
 	httpd_clear_ndelay( hc->conn_fd );
+
+	/* set signals to default behavior. */
+#ifdef HAVE_SIGSET
+	(void) sigset( SIGTERM, SIG_DFL );
+	(void) sigset( SIGINT, SIG_DFL );
+	(void) sigset( SIGCHLD, SIG_DFL );
+	(void) sigset( SIGPIPE, SIG_DFL );
+	(void) sigset( SIGHUP, SIG_DFL );
+	(void) sigset( SIGUSR1, SIG_DFL );
+	(void) sigset( SIGUSR2, SIG_DFL );
+	(void) sigset( SIGALRM, SIG_DFL );
+	(void) sigset( SIGBUS, SIG_DFL );
+#else /* HAVE_SIGSET */
+	(void) signal( SIGTERM, SIG_DFL );
+	(void) signal( SIGINT, SIG_DFL );
+	(void) signal( SIGCHLD, SIG_DFL );
+	(void) signal( SIGPIPE, SIG_DFL );
+	(void) signal( SIGHUP, SIG_DFL );
+	(void) signal( SIGUSR1, SIG_DFL );
+	(void) signal( SIGUSR2, SIG_DFL );
+	(void) signal( SIGALRM, SIG_DFL );
+	(void) signal( SIGBUS, SIG_DFL );
+#endif /* HAVE_SIGSET */
+
 #ifdef CGI_NICE
 	/* Set priority. */
 	(void) nice( CGI_NICE );
 #endif /* CGI_NICE */
-	/* Default behavior for SIGPIPE. */
-#ifdef HAVE_SIGSET
-	(void) sigset( SIGPIPE, SIG_DFL );
-#else /* HAVE_SIGSET */
-	(void) signal( SIGPIPE, SIG_DFL );
-#endif /* HAVE_SIGSET */
 }
 
 /*
