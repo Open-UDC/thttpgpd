@@ -2278,8 +2278,8 @@ cgi_kill2( ClientData client_data, struct timeval* nowP )
 	pid_t pid;
 
 	pid = (pid_t) client_data.i;
-	if ( kill( pid, SIGKILL ) == 0 )
-		syslog( LOG_ERR, "hard-killed child process %d", pid );
+	if ( kill( -pid, SIGKILL ) == 0 )
+		syslog( LOG_ERR, "hard-killed child process group %d", pid );
 	}
 
 static void
@@ -2308,6 +2308,11 @@ static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 	++hc->hs->cgi_count;
 	syslog( LOG_INFO, "spawned %s process %d for '%.200s (%.80s)'", type, pid, hc->expnfilename, hc->pathinfo);
 #ifdef CGI_TIMELIMIT
+	/* set the process group id to a new one for cgi_kill2 (hard kill of all the process group) */
+	if (setpgid(pid,0)) {
+		syslog( LOG_ERR, "hard-kill %d because setpgid fail - %m", pid );
+		kill( pid, SIGKILL );
+	}
 	/* Schedule a kill for the child process, in case it runs too long */
 	client_data.i = pid;
 	if ( tmr_create( (struct timeval*) 0, cgi_kill, client_data, CGI_TIMELIMIT * 1000L, 0 ) == (Timer*) 0 )
@@ -2354,14 +2359,13 @@ static int launch_process(void (*funct) (httpd_conn* ), httpd_conn* hc, int meth
 			hc->sb.st_mtime );
 		return(-1);
 	} else if ( ! (hc->method & methods) ) {
-		httpd_send_err(
-			hc, 501, err501title, "", err501form, httpd_method_str( hc->method ) );
+		httpd_send_err( hc, 501, err501title, "", err501form, httpd_method_str( hc->method ) );
 		return(-1);
 	}
 
 	/* To much forks already running */
 	if ( hc->hs->cgi_limit != 0 && hc->hs->cgi_count >= hc->hs->cgi_limit ) {
-		httpd_send_err(hc, 503, httpd_err503title, "", httpd_err503form,hc->encodedurl );
+		httpd_send_err(hc, 503, httpd_err503title, "", httpd_err503form, hc->encodedurl );
 		return(-1);
 	}
 	r = fork( );
