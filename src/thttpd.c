@@ -219,6 +219,24 @@ static void handle_term( int sig ) {
 static void
 handle_chld( int sig )
 	{
+/* TODO:(DOS security) as we here may only obtain the pid of exitted child,
+ * we need to manage in the global scope an array of *hc, dimensionned to pid_max,
+ * in order to decrease the simultaneous counter associated to hc->client_addr,
+ * (which should also be in the global scope).
+ *
+ * To get pid_max, first search if PID_MAX is defined (in limits.h), if not read
+ * it from /proc/sys/kernel/pid_max (Linux and some other recent Nix system), and
+ * if not set it to 32768 which is the most used value.
+ *
+ * If the child's pid is greater than pid_max: 
+ *  1- after the fork don't set HC_CHILD_RESPOND to decrease it in really_clear_connection
+ *  2- and ignore it here.
+ * Note: yes that's not perfect since it means than some client_addr may have more simultaneous connexion
+ * than authorized. but:
+ *  1- such case should only happen if something dirty has been done outside (like increasing /proc/sys/kernel/pid_max AFTER
+ *  launching this program, or have NO or erronous PID_MAX defined in limits.h)
+ *  2 - it's worse to not decreasing the counter (which is increased as soon as possible, in httpd_get_conn(), before knowing if we will even fork) and block some (non-spammer) client_addr. 
+ */
 	const int oerrno = errno;
 	pid_t pid;
 	int status;
@@ -227,7 +245,6 @@ handle_chld( int sig )
 	/* Set up handler again. */
 	(void) signal( SIGCHLD, handle_chld );
 #endif /* ! HAVE_SIGSET */
-
 	/* Reap defunct children until there aren't any more. */
 	for (;;)
 		{
@@ -262,7 +279,6 @@ handle_chld( int sig )
 	/* Restore previous errno. */
 	errno = oerrno;
 	}
-
 
 /* SIGHUP says to re-open the log file. */
 static void
@@ -1723,7 +1739,7 @@ handle_read( connecttab* c, struct timeval* tvP )
 	/* Check if it's already handled. */
 	if ( hc->file_address == (char*) 0 )
 		{
-		/* No file address means someone else is handling it. */
+		/* No file address means someone else (a child process) is handling it. */
 		int tind;
 		for ( tind = 0; tind < c->numtnums; ++tind )
 			throttles[c->tnums[tind]].bytes_since_avg += hc->bytes_sent;

@@ -124,7 +124,7 @@ typedef struct {
 		maxremoteuser, maxresponse;
 	size_t responselen;
 	time_t if_modified_since, range_if;
-	size_t contentlength;
+	ssize_t contentlength; /* maybe use off_t to be able to make bigger POST on 32-bits archs ? */
 	char* type;				/* not malloc()ed */
 	char* hostname;		/* not malloc()ed */
 	int http_version;   /* default: 10 for HTTP/1.0, 11 means HTTP/1.1 or better */ 
@@ -140,6 +140,7 @@ typedef struct {
 #define HC_SHOULD_LINGER (1<<3)
 #define HC_DETACH_SIGN (1<<4)
 #define HC_LOG_DONE (1<<5)
+//#define HC_CHILD_RESPOND (1<<6) /* Used for decreasing client_addr simultaneous connexion counter in handle_chld() instead of doing it in really_clear_connection() (when the connexion is no more handle by the main parent process)  */
 
 /* Useless macros. BTW: if u really think it improves readability, u may use them */
 #define HX_SET(hx,mask) { (hx)->bfield |= (mask); }

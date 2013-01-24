@@ -250,8 +250,9 @@ port=$myport
 #cgipat=/cgi-bin/*
 
 # Specifies the maximum number of simultaneous requests which need to call fork().
-# Suchs requests are: the CGI programs and the embedded actions (pks/add, pks/lookup ...).
-#cgilimit=200
+# Suchs requests are: the CGI programs, "Accept: multipart/msigned",
+#  or the embedded actions (pks/add, pks/lookup ...).
+#cgilimit=500
 
 # Specifies a file of throttle settings. This feature may be removed in the futur.
 # See $SOFTWARE(8) for details.

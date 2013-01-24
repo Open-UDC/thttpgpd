@@ -1374,6 +1374,7 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 	hc->hs = hs;
 	if (! (hc->client_addr=httpd_ntoa( &sa )) )
 		hc->client_addr="FAIL";
+	/* TODO:(DOS security) manage a max number of connection per client_addr. Hints : use bsearch() (better than hsearch()). cf. HC_CHILD_RESPOND in src/libhttpd.h and handle_chld() in src/thttpd.c */
 	hc->read_idx = 0;
 	hc->checked_idx = 0;
 	hc->checked_state = CHST_FIRSTWORD;
@@ -2304,7 +2305,7 @@ static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 	ClientData client_data;
 
 	++hc->hs->cgi_count;
-	syslog( LOG_INFO, "spawned %s process %d for '%.200s (%.80s)'", type, pid, hc->expnfilename, hc->pathinfo);
+	syslog( LOG_INFO, "%s spawned %s process %d for '%.200s (%.80s)'", hc->client_addr, type, pid, hc->expnfilename, hc->pathinfo);
 #ifdef CGI_TIMELIMIT
 	/* set the process group id to a new one for cgi_kill2 (hard kill of all the process group) */
 	if (setpgid(pid,0)) {
@@ -3482,6 +3483,9 @@ cgi( httpd_conn* hc )
 	return 0;
 	}
 
+/*
+ * \return a negative number to finish the connection, or 0 if success.
+ */
 int
 httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 	static char* indexname;
@@ -3813,6 +3817,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 				return(-1);
 			}
 			close(p[1]); /* it have been dupped on hc->conn_fd */
+			/* Set the pipe write end to no-delay mode. */
 			httpd_set_ndelay(hc->conn_fd);
 		}
 

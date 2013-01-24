@@ -132,7 +132,7 @@
 ** or whatever.  If you don't want any limit, comment this out, but that's
 ** probably a really bad idea.
 */
-#define CGI_TIMELIMIT 180
+#define CGI_TIMELIMIT 300
 
 /* CONFIGURE: Maximum number of simultaneous CGI programs allowed.
 ** If this many are already running, then attempts to run more will
@@ -140,7 +140,7 @@
 ** no limit (and you'd better have a lot of memory).  This can also be
 ** set in the runtime config file, the option name is "cgilimit".
 */
-#define CGI_LIMIT 200
+#define CGI_LIMIT 500
 
 /* CONFIGURE: How many seconds to allow for reading the initial request
 ** on a new connection.
@@ -188,8 +188,8 @@
 /* CONFIGURE: This is required for OpenUDC compatibility : it checks that your bot
  * certificate contain a valid udid2. 
  * (ie: "udid2;c;[A-Z]\{1,20\};[A-Z-]\{1,20\};[0-9-]\{10\};[0-9.e+-]\{14\};[0-9]\+" )
- * Note: If -nk is passed (which means PKS_ADD_MERGE_ONLY unset) it will also checks
- * those added through pks/add.
+ * Note: If -nk is passed, which means new keys are accepted through pks/add, it will
+ * also check that they contain a valid udid2 or ubot1.
  */
 //#define CHECK_UDID2
 
