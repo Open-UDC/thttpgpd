@@ -16,7 +16,6 @@
 
 #include "config.h"
 #include "hkp.h"
-#include "timers.h"
 #include "libhttpd.h"
 
 #define QSTRING_MAX 1024

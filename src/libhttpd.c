@@ -96,6 +96,9 @@ extern char* crypt( const char* key, const char* setting );
 #include "match.h"
 #include "tdate_parse.h"
 #include "hkp.h"
+#ifdef OPENUDC
+#include "udc.h"
+#endif
 
 #ifndef SHUT_WR
 #define SHUT_WR 1
@@ -3515,6 +3518,12 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 		return launch_process(hkp_lookup, hc, METHOD_GET, "hkp");
 	if ( !strcmp(hc->origfilename,"pks/add") )
 		return launch_process(hkp_add, hc, METHOD_POST, "hkp");
+#ifdef OPENUDC
+	if ( !strcmp(hc->origfilename,"udc/create") )
+		return launch_process(udc_create, hc, METHOD_POST, "udc");
+	if ( !strcmp(hc->origfilename,"udc/validate") )
+		return launch_process(udc_validate, hc, METHOD_POST, "udc");
+#endif
 
 	/* Stat the file. */
 	if ( stat( hc->expnfilename, &hc->sb ) < 0 )

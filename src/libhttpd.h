@@ -285,6 +285,7 @@ extern char* err302form;
 extern char* err304title;
 extern char* err411title;
 extern char* err413title;
+extern char* err415title;
 
 
 #ifdef AUTH_FILE
