@@ -2334,8 +2334,6 @@ static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 /*! child_r_start should be call early by the child handling the request */
 static void child_r_start(httpd_conn* hc) {
 	httpd_unlisten( hc->hs );
-	/* we are in a sub-process, turn off no-delay mode. */
-	httpd_clear_ndelay( hc->conn_fd );
 
 	/* set signals to default behavior. */
 #ifdef HAVE_SIGSET
@@ -3456,6 +3454,7 @@ cgi( httpd_conn* hc )
 				hc->encodedurl );
 			return -1;
 			}
+		/* cgi don't have to manage EINTR or EAGAIN, turn off no-delay mode. */
 		httpd_clear_ndelay( hc->conn_fd );
 		r = fork( );
 		if ( r < 0 )

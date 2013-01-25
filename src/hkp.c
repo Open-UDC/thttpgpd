@@ -73,7 +73,7 @@ void hkp_add( httpd_conn* hc ) {
 #endif
 
 	char * buff;
-	int buffsize, rcode=200, mergeonly=(hc->hs->bfield & HS_PKS_ADD_MERGE_ONLY);
+	int i=0, buffsize, rcode=200, mergeonly=(hc->hs->bfield & HS_PKS_ADD_MERGE_ONLY);
 
 	if (hc->contentlength < 12) {
 		httpd_send_err(hc, 411, err411title, "", "Content-Length is absent or too short (%.80s)", "12");
@@ -96,14 +96,19 @@ void hkp_add( httpd_conn* hc ) {
 	c = hc->read_idx - hc->checked_idx;
 	if ( c > 0 )
 		memcpy(buff,&(hc->read_buf[hc->checked_idx]), c);
+	//httpd_set_ndelay(hc->conn_fd);
 	while ( c < hc->contentlength ) {
 		r = read( hc->conn_fd, buff+c, hc->contentlength - c );
-		if ( r < 0 && ( errno == EINTR || errno == EAGAIN ) )
-			{
+		if ( r < 0 && ( errno == EINTR || errno == EAGAIN ) ) {
 			struct timespec tim={0, 300000000}; /* 300 ms */
 			nanosleep(&tim, NULL);
-			continue;
+			if (i++>50) { /* 50*300ms = 15 seconds */
+				httpd_send_err(hc, 408, httpd_err408title, "", httpd_err408form, "" );
+				exit(EXIT_FAILURE);
 			}
+			continue;
+		} else
+			i=0;
 		if ( r <= 0 ) {
 			httpd_send_err(hc, 500, err500title, "", err500form, "read error" );
 			exit(EXIT_FAILURE);
