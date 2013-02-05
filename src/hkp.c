@@ -96,7 +96,6 @@ void hkp_add( httpd_conn* hc ) {
 	c = hc->read_idx - hc->checked_idx;
 	if ( c > 0 )
 		memcpy(buff,&(hc->read_buf[hc->checked_idx]), c);
-	//httpd_set_ndelay(hc->conn_fd);
 	while ( c < hc->contentlength ) {
 		r = read( hc->conn_fd, buff+c, hc->contentlength - c );
 		if ( r < 0 && ( errno == EINTR || errno == EAGAIN ) ) {

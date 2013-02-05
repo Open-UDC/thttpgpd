@@ -140,7 +140,6 @@ typedef struct {
 #define HC_SHOULD_LINGER (1<<3)
 #define HC_DETACH_SIGN (1<<4)
 #define HC_LOG_DONE (1<<5)
-//#define HC_CHILD_RESPOND (1<<6) /* Used for decreasing client_addr simultaneous connexion counter in handle_chld() instead of doing it in really_clear_connection() (when the connexion is no more handle by the main parent process)  */
 
 /* Useless macros. BTW: if u really think it improves readability, u may use them */
 #define HX_SET(hx,mask) { (hx)->bfield |= (mask); }
@@ -155,11 +154,20 @@ typedef struct {
 	int option;
 } interpose_args_t;
 
+/* used to reference all active child (term security, cf. drop_child(), handle_chld() and shut_down().*/
+typedef struct {
+	pid_t pidmin;
+	pid_t pidmax;
+	httpd_conn ** hcs;
+} hctab_t;
+
+extern hctab_t hctab;
+
 /* Methods. */
 #define METHOD_UNKNOWN 0
-#define METHOD_GET 1
-#define METHOD_HEAD 2
-#define METHOD_POST 4
+#define METHOD_GET (1<<0)
+#define METHOD_HEAD (1<<1)
+#define METHOD_POST (1<<2)
 
 /* States for checked_state. */
 #define CHST_FIRSTWORD 0

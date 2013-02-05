@@ -475,7 +475,7 @@ char* err500form =
 
 char* err501title = "Not Implemented";
 char* err501form =
-	"The requested method '%.80s' is not implemented by this server.\n";
+	"The requested method '%.80s' is not implemented for this url.\n";
 
 char* httpd_err503title = "Service Temporarily Overloaded";
 char* httpd_err503form =
@@ -2306,24 +2306,57 @@ cgi_kill( ClientData client_data, struct timeval* nowP )
 /*! drop_child should by call by the parent when a child will handle the request */
 static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 	ClientData client_data;
+	httpd_conn** tmphcs;
 
 	++hc->hs->cgi_count;
 	syslog( LOG_INFO, "%s spawned %s process %d for '%.200s (%.80s)'", hc->client_addr, type, pid, hc->expnfilename, hc->pathinfo);
-#ifdef CGI_TIMELIMIT
-	/* set the process group id to a new one for cgi_kill2 (hard kill of all the process group) */
+
+	/* set the process group id to a new one for hard killing of all the process group (cgi_kill2,...)) */
 	if (setpgid(pid,0)) {
-		syslog( LOG_ERR, "hard-kill %d because setpgid fail - %m", pid );
+		syslog( LOG_ERR, "hard-kill %d because %s fail - %m", pid,"setpgid");
 		kill( pid, SIGKILL );
 	}
+
+	/* Memorise pid and it's hc */
+	if (pid<hctab.pidmin) {
+		tmphcs=realloc(hctab.hcs, (hctab.pidmax-pid)*sizeof(httpd_conn *));
+		if (tmphcs) {
+			memmove(&tmphcs[hctab.pidmin-pid], tmphcs, (hctab.pidmax-hctab.pidmin)*sizeof(httpd_conn *));
+			memset(tmphcs, 0, (hctab.pidmin-pid)*sizeof(httpd_conn *));
+			hctab.hcs=tmphcs;
+			hctab.pidmin=pid;
+			hctab.hcs[0]=hc;
+		} else {
+			syslog( LOG_ERR, "hard-kill %d because %s fail - %m", pid,"realloc(hctab.hcs,...)");
+			kill( -pid, SIGKILL );
+		}
+	} else if (pid>=hctab.pidmax) {
+		tmphcs=realloc(hctab.hcs, (pid+128-hctab.pidmin)*sizeof(httpd_conn *));
+		if (tmphcs) {
+			memset(&tmphcs[hctab.pidmax-hctab.pidmin], 0, (pid+128-hctab.pidmax)*sizeof(httpd_conn *));
+			hctab.hcs=tmphcs;
+			hctab.pidmax=pid+128;
+			hctab.hcs[pid-hctab.pidmin]=hc;
+		} else {
+			syslog( LOG_ERR, "hard-kill %d because %s fail - %m", pid,"realloc(hctab.hcs,...)");
+			kill( -pid, SIGKILL );
+		}
+	} else
+		hctab.hcs[pid-hctab.pidmin]=hc;
+
+#ifdef CGI_TIMELIMIT
 	/* Schedule a kill for the child process, in case it runs too long */
 	client_data.i = pid;
 	if ( tmr_create( (struct timeval*) 0, cgi_kill, client_data, CGI_TIMELIMIT * 1000L, 0 ) == (Timer*) 0 )
 		{
-		syslog( LOG_CRIT, "tmr_create(cgi_kill %d) failed (%s)",pid,type);
-		/* TODO : It kills the daemon, so maybe kill the Child and return instead of exit */
-		exit(EXIT_FAILURE);
+		syslog( LOG_ERR, "hard-kill %d because %s fail - %m", pid,"tmr_create(cgi_kill...)");
+		kill( -pid, SIGKILL );
+		//syslog( LOG_CRIT, "tmr_create(cgi_kill %d) failed (%s)",pid,type);
+		//exit(EXIT_FAILURE);
 		}
 #endif /* CGI_TIMELIMIT */
+
+
 	hc->status = 200;
 	hc->bytes_sent = CGI_BYTECOUNT;
 	hc->bfield &= ~HC_SHOULD_LINGER;

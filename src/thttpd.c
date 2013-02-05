@@ -169,6 +169,9 @@ peer_t myself;
 regex_t udid2c_regex;
 #endif
 
+/* contain an array "hc[pid]" for DOS and term security */
+hctab_t hctab;
+
 /* Forwards. */
 static void parse_args( int argc, char** argv );
 static void usage( void );
@@ -262,6 +265,16 @@ handle_chld( int sig )
 				syslog( LOG_ERR, "child wait - %m" );
 			break;
 			}
+
+		/* Note 1: here may happen a minor race bug :
+		 * child may be killed earlier and following code which unset hctab.hcs[pid-hctab.pidmin]
+		 * may happen BEFORE we set it. 
+		 * In such case shut_down() MAY try to kill an incorrect pid - Few chances that such pid
+		 * rely on an killable existing process (remind also that thttpd/ludd don't stay as root). */
+		if ( pid>=hctab.pidmin && pid<hctab.pidmax )
+			/* Note 2 : here we can't no more use the hc pointer because it should have been freed */
+			hctab.hcs[pid-hctab.pidmin]=(httpd_conn *)0;
+		
 		/* Decrement the CGI count.  Note that this is not accurate, since
 		** each CGI can involve two or even three child processes.
 		** Decrementing for each child means that when there is heavy CGI
@@ -450,6 +463,13 @@ main( int argc, char** argv )
 	throttles = (throttletab*) 0;
 	if ( throttlefile != (char*) 0 )
 		read_throttlefile( throttlefile );
+
+	/* "hc[pid]" */
+	hctab.pidmin=getpid()+1;
+	hctab.pidmax=hctab.pidmin+128;
+	hctab.hcs=calloc((hctab.pidmax-hctab.pidmin),sizeof(httpd_conn *)); 
+	if (! hctab.hcs )
+		DIE( 1, "out of memory allocating %s", "hctab" );
 
 	/* If we're root and we're going to become another user, get the uid/gid
 	** now.
@@ -841,7 +861,7 @@ main( int argc, char** argv )
 	/* Initialize our connections table. */
 	connects = NEW( connecttab, max_connects );
 	if ( connects == (connecttab*) 0 )
-		DIE( 1,"out of memory allocating a connecttab" );
+		DIE( 1, "out of memory allocating %s", "a connecttab" );
 	for ( cnum = 0; cnum < max_connects; ++cnum )
 		{
 		connects[cnum].conn_state = CNST_FREE;
@@ -1501,13 +1521,7 @@ read_throttlefile( char* throttlefile )
 				throttles = RENEW( throttles, throttletab, maxthrottles );
 				}
 			if ( throttles == (throttletab*) 0 )
-				{
-				syslog( LOG_CRIT, "out of memory allocating a throttletab" );
-				(void) fprintf(
-					stderr, "%s: out of memory allocating a throttletab\n",
-					argv0 );
-				exit( 1 );
-				}
+				DIE( 1, "out of memory allocating %s", "a throttletab" );
 			}
 
 		/* Add to table. */
@@ -1530,8 +1544,16 @@ shut_down( void )
 	int cnum;
 	struct timeval tv;
 
+	/* childs's gentle kill */
+	for ( cnum = hctab.pidmin; cnum < hctab.pidmax; ++cnum )
+		if (hctab.hcs[cnum-hctab.pidmin]) {
+			syslog( LOG_ERR, "killed child process %d", cnum );
+			kill( cnum, SIGINT );
+		}
+
 	(void) gettimeofday( &tv, (struct timezone*) 0 );
 	logstats( &tv );
+
 	for ( cnum = 0; cnum < max_connects; ++cnum )
 		{
 		if ( connects[cnum].conn_state != CNST_FREE )
@@ -1559,6 +1581,11 @@ shut_down( void )
 	free( (void*) connects );
 	if ( throttles != (throttletab*) 0 )
 		free( (void*) throttles );
+
+	/* childs's hard kill */
+	for ( cnum = hctab.pidmin; cnum < hctab.pidmax; ++cnum )
+		if (hctab.hcs[cnum-hctab.pidmin])
+			kill( -cnum, SIGKILL );
 	}
 
 
@@ -1598,7 +1625,7 @@ handle_newconnect( struct timeval* tvP, int listen_fd )
 			c->hc = NEW( httpd_conn, 1 );
 			if ( c->hc == (httpd_conn*) 0 )
 				{
-				syslog( LOG_CRIT, "out of memory allocating an httpd_conn" );
+				syslog( LOG_CRIT, "out of memory allocating %s", "an httpd_conn" );
 				exit( 1 );
 				}
 			c->hc->initialized = 0;
