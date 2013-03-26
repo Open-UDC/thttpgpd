@@ -197,7 +197,11 @@ void hkp_add( httpd_conn* hc ) {
 	if (rcode==202) {
 		send_mime(hc, 202, ok200title, "", "X-HKP-Status: 418 some key(s) was rejected as per keyserver policy\015\012", "text/html; charset=%s",(off_t) -1, hc->sb.st_mtime );
 		httpd_write_response(hc);
-		r=snprintf(buff,buffsize,"<html><head><title>pks/add ?? keys</title></head><body><h2>%s</h2><h3>It may happen if a keys is unknow or doesn't contain a valid udid2 (\"udid2;c;...\")</h3></body></html>","X-HKP-Status: 418 some key(s) was rejected as per keyserver policy\015\012");
+#ifdef CHECK_UDID2
+		r=snprintf(buff,buffsize,"<html><head><title>pks/add ?? keys</title></head><body><h2>%s</h2><h3>It may happen if a key is new, or doesn't contain a valid udid2 (\"udid2;c;...\")</h3></body></html>","X-HKP-Status: 418 some key(s) was rejected as per keyserver policy\015\012");
+#else
+		r=snprintf(buff,buffsize,"<html><head><title>pks/add ?? keys</title></head><body><h2>%s</h2><h3>It may happen if the server don't use the newkeys option (-nk) </h3></body></html>","X-HKP-Status: 418 some key(s) was rejected as per keyserver policy\015\012");
+#endif
 	} else {
 		send_mime(hc, 200, ok200title, "", "", "text/html; charset=%s",(off_t) -1, hc->sb.st_mtime );
 		httpd_write_response(hc);
