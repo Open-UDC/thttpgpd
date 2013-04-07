@@ -74,6 +74,8 @@ subdirs:
 		HOMEDIR=$(HOMEDIR) WEBDIR=$(WEBDIR) \
 	) ; done
 
+test:
+	./src/$(SOFTWARE) --help || ./src/$(SOFTWARE) --version
 
 install:	installsubdirs
 	-useradd -r -c "system user for $(SOFTWARE)" -d "$(HOMEDIR)" -s /sbin/nologin $(LUDDUSER)
