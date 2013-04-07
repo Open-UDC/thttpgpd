@@ -14,6 +14,8 @@ thttpgpd is a tiny/turbo/throttling HTTP server with OpenPGP features.
 .RB [ -d
 .IR dir ]
 .RB [ -r | -nor ]
+.RB [ -L
+.IR connlimit ]
 .RB [ -u
 .IR user ]
 .RB [ -c
@@ -77,6 +79,15 @@ If -r is the compiled-in default, then -nor disables it.
 See below for details.
 The config-file option names for this flag are "chroot" and "nochroot",
 and the config.h option is ALWAYS_CHROOT.
+.TP
+.B -L
+Specifies the number of maximum simulateous connexion per client (ip). 
+This use the external tool iptables (which have to be in your $PATH and need
+the root privileges).
+If @software@ isn't started as root or if connlimit is not a positive number,
+@software@ won't touch netfilter... and it should be more sensitive to DOS attacks.
+The config-file option name for this flag is "connlimit",
+and the config.h option is DEFAULT_CONNLIMIT.
 .TP
 .B -u
 Specifies what user to switch to after initialization when started as root.

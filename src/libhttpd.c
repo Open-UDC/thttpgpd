@@ -1377,7 +1377,6 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 	hc->hs = hs;
 	if (! (hc->client_addr=httpd_ntoa( &sa )) )
 		hc->client_addr="FAIL";
-	/* TODO:(DOS security) manage a max number of connection per client_addr. Hints : use bsearch() (better than hsearch()). cf. HC_CHILD_RESPOND in src/libhttpd.h and handle_chld() in src/thttpd.c */
 	hc->read_idx = 0;
 	hc->checked_idx = 0;
 	hc->checked_state = CHST_FIRSTWORD;
@@ -2415,7 +2414,7 @@ static int launch_process(void (*funct) (httpd_conn* ), httpd_conn* hc, int meth
 	}
 
 	/* To much forks already running */
-	if ( hc->hs->cgi_limit != 0 && hc->hs->cgi_count >= hc->hs->cgi_limit ) {
+	if ( hc->hs->cgi_limit > 0 && hc->hs->cgi_count >= hc->hs->cgi_limit ) {
 		httpd_send_err(hc, 503, httpd_err503title, "", httpd_err503form, hc->encodedurl );
 		return(-1);
 	}
@@ -3480,7 +3479,7 @@ cgi( httpd_conn* hc )
 	if ( hc->method == METHOD_GET || hc->method == METHOD_POST )
 		{
 		/* To much forks already running */
-		if ( hc->hs->cgi_limit != 0 && hc->hs->cgi_count >= hc->hs->cgi_limit )
+		if ( hc->hs->cgi_limit > 0 && hc->hs->cgi_count >= hc->hs->cgi_limit )
 			{
 			httpd_send_err(
 				hc, 503, httpd_err503title, "", httpd_err503form,
@@ -3828,7 +3827,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 			return -1;
 		}
 		/* (Won't sign If To much forks are already running )*/
-		if (hc->bfield & HC_DETACH_SIGN && ( hc->hs->cgi_limit == 0 || hc->hs->cgi_count < hc->hs->cgi_limit ) ) {
+		if (hc->bfield & HC_DETACH_SIGN && ( hc->hs->cgi_limit <= 0 || hc->hs->cgi_count < hc->hs->cgi_limit ) ) {
 			int ipid,p[2];
 
 			if ( pipe( p ) < 0 ) {

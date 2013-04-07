@@ -237,22 +237,30 @@ port=$myport
 #nochroot
 #chroot
 
+# The number of maximum simulateous connexion per client (ip). 
+# This use external tool iptables (which have to be in your \$PATH and need
+# the root privileges).
+# If $SOFTWARE isn't started as root or if connlimit is not a positive number,
+# $SOFTWARE won't touch netfilter... and it should be more sensitive to DOS attacks.
+#connlimit=20
+
 # Specifies what user to switch to after initialization when started as root.
 # It also change the homedir to this user's \$HOME if "dir" is not specified.
 #user=$LUDDUSER
-
-# Specifies a wildcard exclusion pattern for ressources which should NOT be signed.
-# See $SOFTWARE(8) for details.
-#sigpat=/cgi-bin/*
 
 # Specifies a wildcard pattern for CGI programs, for instance "**.cgi" or
 # "/cgi-bin/*". See $SOFTWARE(8) for details.
 #cgipat=/cgi-bin/*
 
+# Specifies a wildcard exclusion pattern for ressources which should NOT be signed.
+# See $SOFTWARE(8) for details.
+#sigpat=/cgi-bin/*
+
 # Specifies the maximum number of simultaneous requests which need to call fork().
 # Suchs requests are: the CGI programs, "Accept: multipart/msigned",
-#  or the embedded actions (pks/add, pks/lookup ...).
-#cgilimit=500
+# or the embedded actions (pks/add, pks/lookup ...).
+# If set to 0 (or less), there is no limit. (or cf. /proc/sys/kernel/pid_max).
+#cgilimit=0
 
 # Specifies a file of throttle settings. This feature may be removed in the futur.
 # See $SOFTWARE(8) for details.

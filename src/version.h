@@ -6,7 +6,7 @@
 #ifndef SOFTWARE_NAME
 #define SOFTWARE_NAME "ludd"
 #endif /* SOFTWARE_NAME */
-#define SOFTWARE_VERSION "0.2.5 25Jan2013"
+#define SOFTWARE_VERSION "0.2.6 07Apr2013"
 #define SOFTWARE_ADDRESS "http://www.openudc.org/"
 
 #endif /* _VERSION_H_ */

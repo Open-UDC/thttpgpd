@@ -126,13 +126,27 @@
  */
 #define SIG_CACHEDIR "sigcache"
 
+/* CONFIGURE: Maximum number of simultaneous connexion per client (ip). 
+ * This use external tool iptables (which have to be in your $PATH and
+ * need the root privileges).
+ * If this is defined to zero or less, no system("iptables...") calls
+ * are done and it should be more sensitive to DOS attacks.
+ * This can also be set in the runtime config file, the option name is
+ * "connlimit".
+*/
+#ifndef DEFAULT_CONNLIMIT
+#define DEFAULT_CONNLIMIT 0
+#endif /* DEFAULT_CONNLIMIT */
+
 /* CONFIGURE: How many seconds to allow CGI programs to run before killing
 ** them.  This is in case someone writes a CGI program that goes into an
 ** infinite loop, or does a massive database lookup that would take hours,
 ** or whatever.  If you don't want any limit, comment this out, but that's
 ** probably a really bad idea.
 */
+#ifndef CGI_TIMELIMIT
 #define CGI_TIMELIMIT 300
+#endif /* CGI_TIMELIMIT */
 
 /* CONFIGURE: Maximum number of simultaneous CGI programs allowed.
 ** If this many are already running, then attempts to run more will
@@ -140,7 +154,9 @@
 ** no limit (and you'd better have a lot of memory).  This can also be
 ** set in the runtime config file, the option name is "cgilimit".
 */
-#define CGI_LIMIT 500
+#ifndef CGI_LIMIT
+#define CGI_LIMIT 10000
+#endif
 
 /* CONFIGURE: How many seconds to allow for reading the initial request
 ** on a new connection.

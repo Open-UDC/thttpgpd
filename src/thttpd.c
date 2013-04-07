@@ -105,11 +105,13 @@ static char * sig_pattern = SIG_EXCLUDE_PATTERN;
 static char * sig_pattern = (char*) 0;
 #endif /* SIG_EXCLUDE_PATTERN */
 static unsigned short port = DEFAULT_PORT;
+static int connlimit = DEFAULT_CONNLIMIT;
 static char* logfile = (char*) 0;
 static char* throttlefile = (char*) 0;
 static char* hostname = (char*) 0;
 static char* pidfile = (char*) 0;
 static char* user = DEFAULT_USER;
+static char iptables_cmd[128] = "";
 
 typedef struct {
 	char* pattern;
@@ -169,7 +171,7 @@ peer_t myself;
 regex_t udid2c_regex;
 #endif
 
-/* contain an array "hc[pid]" for DOS and term security */
+/* contain an array "hc[pid]" to kill childs on exit */
 hctab_t hctab;
 
 /* Forwards. */
@@ -205,6 +207,8 @@ static void thttpd_logstats( long secs );
 /* Macro to DIE */
 #define DIE(code,...) do { \
 	syslog( LOG_CRIT,__VA_ARGS__); \
+	if ( iptables_cmd[0] != '\0' ) \
+		system(iptables_cmd); \
 	errx((code),__VA_ARGS__); \
 	} while (0)
 
@@ -222,24 +226,6 @@ static void handle_term( int sig ) {
 static void
 handle_chld( int sig )
 	{
-/* TODO:(DOS security) as we here may only obtain the pid of exitted child,
- * we need to manage in the global scope an array of *hc, dimensionned to pid_max,
- * in order to decrease the simultaneous counter associated to hc->client_addr,
- * (which should also be in the global scope).
- *
- * To get pid_max, first search if PID_MAX is defined (in limits.h), if not read
- * it from /proc/sys/kernel/pid_max (Linux and some other recent Nix system), and
- * if not set it to 32768 which is the most used value.
- *
- * If the child's pid is greater than pid_max: 
- *  1- after the fork don't set HC_CHILD_RESPOND to decrease it in really_clear_connection
- *  2- and ignore it here.
- * Note: yes that's not perfect since it means than some client_addr may have more simultaneous connexion
- * than authorized. but:
- *  1- such case should only happen if something dirty has been done outside (like increasing /proc/sys/kernel/pid_max AFTER
- *  launching this program, or have NO or erronous PID_MAX defined in limits.h)
- *  2 - it's worse to not decreasing the counter (which is increased as soon as possible, in httpd_get_conn(), before knowing if we will even fork) and block some (non-spammer) client_addr. 
- */
 	const int oerrno = errno;
 	pid_t pid;
 	int status;
@@ -269,7 +255,7 @@ handle_chld( int sig )
 		/* Note 1: here may happen a minor race bug :
 		 * child may be killed earlier and following code which unset hctab.hcs[pid-hctab.pidmin]
 		 * may happen BEFORE we set it. 
-		 * In such case shut_down() MAY try to kill an incorrect pid - Few chances that such pid
+		 * In such case shut_down() may try to kill an incorrect pid - Few chances that such pid
 		 * rely on an killable existing process (remind also that thttpd/ludd don't stay as root). */
 		if ( pid>=hctab.pidmin && pid<hctab.pidmax )
 			/* Note 2 : here we can't no more use the hc pointer because it should have been freed */
@@ -284,7 +270,7 @@ handle_chld( int sig )
 		if ( hs != (httpd_server*) 0 )
 			{
 			if ( hs->cgi_count > 0 )
-				/* ... If a fork is called without increased the cgi_count (done by drop_child()), which is the case for cgi_interpose_* */
+				/* ... If a fork is called without increased the cgi_count (done by drop_child()), which is the case for cgi_interpose_output and cgi_interpose_input */
 				--hs->cgi_count;
 			}
 		}
@@ -538,7 +524,7 @@ main( int argc, char** argv )
 	if (read_config(DEFAULT_CFILE) < 2)
 		/* if read_config does something: re-parse args which override it */
 		parse_args( argc, argv );
-	
+
 	/* Look up hostname now, in case we will chroot(). */
 	lookup_hostname( &sa4, sizeof(sa4), &gotv4, &sa6, sizeof(sa6), &gotv6 );
 	if ( ! ( gotv4 || gotv6 ) )
@@ -612,6 +598,39 @@ main( int argc, char** argv )
 	if ( max_connects < 0 )
 		DIE(1,"fdwatch initialization failure");
 	max_connects -= SPARE_FDS;
+
+	/* if we have to limit the number of connexion per client (and if root), set the iptables rule */
+	if ( connlimit > 0 ) {
+		if ( getuid() != 0 ) {
+			syslog( LOG_WARNING, "Could not set a connlimit without root privileges (iptables)." );
+			warnx("Could not set a connlimit without root privileges (iptables).");
+		}
+		else {
+			int s;
+			s=snprintf(iptables_cmd, sizeof(iptables_cmd),"iptables -C INPUT -p tcp --syn --dport %d -m connlimit --connlimit-above %d -j DROP 2> /dev/null",port,connlimit);
+			if (s >= sizeof(iptables_cmd) || s < 1 ) {
+				iptables_cmd[0]='\0';
+				DIE(1,"snprintf initializing iptables connlimit rule - %m.");
+			}
+			s=system(iptables_cmd);
+			if ( s == 0 )
+				/* the rule already exist - nothing to do */
+				iptables_cmd[0]='\0';
+			else {
+				*strstr(iptables_cmd,"2>")='\0'; /* remove the "2> /dev/null" */
+				iptables_cmd[10]='A'; /* replace the parameter -C (check) by -A (add) */
+				s=system(iptables_cmd);
+				if ( s == 0 )
+					/* success, we should clear the rule on exiting */
+					iptables_cmd[10]='D'; /* replace the parameter -A (add) by -D (delete) */
+				else {
+					/* fail, warn and clear iptables_cmd to do nothing on exit */
+					syslog( LOG_WARNING, "system(\"%s\") fail and return %d.",iptables_cmd,s);
+					iptables_cmd[0]='\0';
+				}
+			}
+		}
+	}
 
 	/* Chroot if requested. */
 	if ( do_chroot ) {
@@ -1024,6 +1043,11 @@ parse_args( int argc, char** argv )
 			do_chroot = 0;
 			hsbfield &= ~HS_NO_SYMLINK_CHECK;
 			}
+		else if ( strcmp( argv[argn], "-L" ) == 0 && argn + 1 < argc )
+			{
+			++argn;
+			connlimit = (unsigned short) atoi( argv[argn] );
+			}
 		else if ( strcmp( argv[argn], "-nk" ) == 0 )
 			{
 			hsbfield &= ~HS_PKS_ADD_MERGE_ONLY;
@@ -1099,31 +1123,39 @@ usage( void )
 	    (void) fprintf( stderr,
 			    "Usage: %s [options]\n"
 			    "Options:\n"
-			    "	-C FILE     config file to use (default: "DEFAULT_CFILE" in running directory)\n"
-			    "	-p PORT     listenning port (default: %d)\n"
-			    "	-H HOST     host or hostname to bind to (default: all available)\n"
-			    "	-d DIR      running directory (default: "DEFAULT_USER"'s home or $HOME/."SOFTWARE_NAME"/)\n"
-			    "	-u USER     user to switch to (when started as root, default: "DEFAULT_USER")\n"
-			    "	-r|-nor     enable/disable chroot (default: disable to make cgi works)\n"
+			    "	-C FILE     config file to use - default: "DEFAULT_CFILE" in running directory\n"
+			    "	-p PORT     listenning port - default: %d\n"
+			    "	-H HOST     host or hostname to bind to - default: all available\n"
+			    "	-d DIR      running directory - default: "DEFAULT_USER"'s home or $HOME/."SOFTWARE_NAME"/\n"
+			    "	-r|-nor     enable/disable chroot - default: disable to make all cgi works\n"
+#if DEFAULT_CONNLIMIT > 0
+			    "	-L LIMIT    maximum simulateous connexion per client (if started as root) - default: %d\n"
+#else /* DEFAULT_CONNLIMIT > 0 */
+			    "	-L LIMIT    maximum simulateous connexion per client (if started as root) - default: no limit\n"
+#endif /* DEFAULT_CONNLIMIT > 0 */
+			    "	-u USER     user to switch to (if started as root) - default: "DEFAULT_USER"\n"
 #ifdef CGI_PATTERN
-			    "	-c CGIPAT   pattern for CGI programs (default: "CGI_PATTERN")\n"
+			    "	-c CGIPAT   pattern for CGI programs - default: "CGI_PATTERN"\n"
 #endif /* CGI_PATTERN */
 #ifdef SIG_EXCLUDE_PATTERN
-			    "	-s SIG!PAT  pattern disabling signed responses (default: "SIG_EXCLUDE_PATTERN")\n"
+			    "	-s SIG!PAT  pattern disabling signed responses - default: "SIG_EXCLUDE_PATTERN"\n"
 #endif /* SIG_EXCLUDE_PATTERN */
-			    "	-t FILE     file of throttle settings (default: no throtlling)\n"
-			    "	-l LOGFILE  file for logging (default: via syslog())\n"
+			    "	-t FILE     file of throttle settings - default: no throtlling\n"
+			    "	-l LOGFILE  file for logging - default: via syslog()\n"
 			    "	-i PIDFILE  file to write the process-id to\n"
 			    "	-nk         new (unknow) keys may be added in our keyring through \"pks/add\"\n"
-			    "	-e PORT     external port (to be reach by peers, default: listenning port)\n"
-			    "	-E HOST     external host name or IP adress (default: default hostname)\n"
-			    "	-f FPR      fingerprint of the "SOFTWARE_NAME"'s OpenPGP key (no default, MANDATORY)\n"
+			    "	-e PORT     external port (to be reach by peers) - default: listenning port\n"
+			    "	-E HOST     external host name or IP adress - default: default hostname\n"
+			    "	-f FPR      fingerprint of the "SOFTWARE_NAME"'s OpenPGP key - no default, MANDATORY\n"
 			    "	-V          show version and exit\n"
 			    "	-D          stay in foreground\n"
-			    , argv0, DEFAULT_PORT );
+			, argv0, DEFAULT_PORT
+#if DEFAULT_CONNLIMIT > 0
+			, DEFAULT_CONNLIMIT
+#endif /* DEFAULT_CONNLIMIT > 0 */
+			);
 	    exit( 1 );
 	}
-
 
 /*! read_config read once a configuration file
  * This function doesn't nothing after being called once
@@ -1196,6 +1228,11 @@ static int read_config( char* filename )
 				no_value_required( name, value );
 				do_chroot = 0;
 				hsbfield &= ~HS_NO_SYMLINK_CHECK;
+				}
+			else if ( strcasecmp( name, "connlimit" ) == 0 )
+				{
+				value_required( name, value );
+				connlimit = (unsigned short) atoi( value );
 				}
 			else if ( strcasecmp( name, "newkeys" ) == 0 )
 				{
@@ -1586,8 +1623,15 @@ shut_down( void )
 	for ( cnum = hctab.pidmin; cnum < hctab.pidmax; ++cnum )
 		if (hctab.hcs[cnum-hctab.pidmin])
 			kill( -cnum, SIGKILL );
-	}
 
+	/* if we have to, remove rule from netfilter */
+	if ( iptables_cmd[0] != '\0' )
+		if (system(iptables_cmd) != 0)
+	/* Hehehe..  we fail as we should have no more root privileges...
+	 * So give at least the solution command in syslog */
+			syslog(LOG_WARNING,"Oups, I have no more enough privileges to clean my own netfilter rule 8-/ ... should do: sudo %s ", iptables_cmd);
+
+	}
 
 static int
 handle_newconnect( struct timeval* tvP, int listen_fd )
