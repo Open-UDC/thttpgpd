@@ -43,3 +43,5 @@ The file 'geolist_ITA' is available under the Creative Commons
 Attribution 3.0 License.   It was generated from the IT.zip database
 from geonames.org, using the script published in
 <https://bitbucket.org/rev22/geolist-ita-openudc>.
+
+## Build Status [![Build Status](https://secure.travis-ci.org/Open-UDC/thttpgpd.png?branch=master)](http://travis-ci.org/Open-UDC/thttpgpd)
