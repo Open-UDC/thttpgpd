@@ -1,4 +1,6 @@
- thttpgpd or ludd are HTTP servers with OpenPGP features (hkp public key server,
+# thttpgpd and LUDD
+
+thttpgpd or ludd are HTTP servers with OpenPGP features (hkp public key server,
 HTTP OpenPGP authentication, Accept: "multipart/msigned" MIME type...).
 
  The difference between ludd and thttpgpd is that ludd is compiled with OpenUDC
@@ -23,6 +25,10 @@ or at least other studies about Social Credit.
 Check the web page (http://www.openudc.org) for updates, or add
 yourself to the mailing list open-udc@googlegroups.com
 
+## Build Status [![Build Status](https://secure.travis-ci.org/Open-UDC/thttpgpd.png?branch=master)](http://travis-ci.org/Open-UDC/thttpgpd)
+
+## License
+
 Copyright (c) 2010 The open-udc.org team.
 
 This program is free software; you can redistribute it and/or modify
@@ -43,5 +49,3 @@ The file 'geolist_ITA' is available under the Creative Commons
 Attribution 3.0 License.   It was generated from the IT.zip database
 from geonames.org, using the script published in
 <https://bitbucket.org/rev22/geolist-ita-openudc>.
-
-## Build Status [![Build Status](https://secure.travis-ci.org/Open-UDC/thttpgpd.png?branch=master)](http://travis-ci.org/Open-UDC/thttpgpd)
