@@ -1129,9 +1129,9 @@ usage( void )
 			    "	-d DIR      running directory - default: "DEFAULT_USER"'s home or $HOME/."SOFTWARE_NAME"/\n"
 			    "	-r|-nor     enable/disable chroot - default: disable to make all cgi works\n"
 #if DEFAULT_CONNLIMIT > 0
-			    "	-L LIMIT    maximum simulateous connexion per client (if started as root) - default: %d\n"
+			    "	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: %d\n"
 #else /* DEFAULT_CONNLIMIT > 0 */
-			    "	-L LIMIT    maximum simulateous connexion per client (if started as root) - default: no limit\n"
+			    "	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: no limit\n"
 #endif /* DEFAULT_CONNLIMIT > 0 */
 			    "	-u USER     user to switch to (if started as root) - default: "DEFAULT_USER"\n"
 #ifdef CGI_PATTERN

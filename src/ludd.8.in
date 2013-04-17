@@ -81,7 +81,7 @@ The config-file option names for this flag are "chroot" and "nochroot",
 and the config.h option is ALWAYS_CHROOT.
 .TP
 .B -L
-Specifies the number of maximum simulateous connexion per client (ip). 
+Specifies the number of maximum simultaneous connexion per client (ip). 
 This use the external tool iptables (which have to be in your $PATH and need
 the root privileges).
 If @software@ isn't started as root or if connlimit is not a positive number,
