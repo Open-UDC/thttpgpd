@@ -503,7 +503,7 @@ void httpd_write_response( httpd_conn* hc ) {
 	}
 }
 
-/* Set no-delay / non-blocking mode on a socket. */
+/* Set non-blocking (previously a.k.a. O_NDELAY) mode on a socket, pipe... */
 void
 httpd_set_ndelay( int fd )
 	{
@@ -512,14 +512,14 @@ httpd_set_ndelay( int fd )
 	flags = fcntl( fd, F_GETFL, 0 );
 	if ( flags != -1 )
 		{
-		newflags = flags | (int) O_NDELAY;
+		newflags = flags | (int) O_NONBLOCK;
 		if ( newflags != flags )
 			(void) fcntl( fd, F_SETFL, newflags );
 		}
 	}
 
 
-/* Clear no-delay / non-blocking mode on a socket. */
+/* Clear O_NONBLOCK / set blocking mode on a socket, pipe... */
 void
 httpd_clear_ndelay( int fd )
 	{
@@ -528,7 +528,7 @@ httpd_clear_ndelay( int fd )
 	flags = fcntl( fd, F_GETFL, 0 );
 	if ( flags != -1 )
 		{
-		newflags = flags & ~ (int) O_NDELAY;
+		newflags = flags & ~ (int) O_NONBLOCK;
 		if ( newflags != flags )
 			(void) fcntl( fd, F_SETFL, newflags );
 		}

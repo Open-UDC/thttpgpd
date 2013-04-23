@@ -57,6 +57,7 @@ static char * get_matching_comment(const regex_t *preg,const gpgme_key_t gkey) {
 }
 #endif /* CHECK_UDID2 */
 
+/*! manage "pks/add" url interface */
 void hkp_add( httpd_conn* hc ) {
 #define INPUT_MAX (1<<17) /* 1<<17 = 128ko */
 	size_t c;
@@ -217,7 +218,7 @@ void hkp_add( httpd_conn* hc ) {
 	 *  - revoke the one with with an usable secret key.
 	 *  - propagate them to other ludd key server.
 	 * DONE:
-	 *  - check if they correspond to our policy (expire less than 20 years after, udid2 must be present ...)
+	 *  - check if they correspond to our policy (newkeys option -nk, udid2 ...)
 	 */
 
 }
@@ -241,6 +242,7 @@ static void gpg_data_release_cb(void *handle)
 	    /* must just be present... bug or feature?!? */
 }
 
+/*! manage "pks/lookup" url interface */
 void hkp_lookup( httpd_conn* hc ) {
 
 #define HKP_MAX_SEARCHS 32

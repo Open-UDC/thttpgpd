@@ -109,18 +109,18 @@ for ((i=0;$#;)) ; do
 	shift
 done
 
-mkdir -p  "$dir/gpgme" "$dir/sigcache"
+mkdir -p  "$dir/gpgme" "$dir/sigcache" "$dir/pub"
 if ((isroot)) ; then
 	chown -R "$LUDDUSER" "$dir/sigcache"
 	((OPENUDC)) && chown -R "$LUDDUSER" "$dir/pub/udc"
 fi
 
 if [[ "$dir" != "$refdir" ]] ; then
-	cp -avf "$refdir/pub/udid2" "$dir/pub"
-	cp -avf "$refdir/pub/pks" "$dir/pub"
+	cp -avf "$refdir/pub/pks" "$dir/pub/"
 	if ((OPENUDC)) ; then 
+		cp -avf "$refdir/pub/udid2" "$dir/pub/"
 		cp -avf "$refdir/openudc_init.sh" "$dir"
-		cp -avf "$refdir/pub/udc" "$dir/pub"
+		cp -avf "$refdir/pub/udc" "$dir/pub/"
 	fi
 fi
 

@@ -4,9 +4,14 @@
 #define _VERSION_H_
 
 #ifndef SOFTWARE_NAME
+#ifdef OPENUDC
 #define SOFTWARE_NAME "ludd"
+#else /* OPENUDC */
+#define SOFTWARE_NAME "thttpgpd"
+#endif /* OPENUDC */
 #endif /* SOFTWARE_NAME */
-#define SOFTWARE_VERSION "0.2.6 17Apr2013"
+
+#define SOFTWARE_VERSION "0.2.7 23Apr2013"
 #define SOFTWARE_ADDRESS "http://www.openudc.org/"
 
 #endif /* _VERSION_H_ */

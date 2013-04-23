@@ -29,6 +29,9 @@
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
+/* CONFIGURE: OpenUDC support ( http://openudc.org ) */
+//#define OPENUDC
+
 #include "version.h"
 
 /* The following configuration settings are sorted in order of decreasing
@@ -40,9 +43,6 @@
 ** The idea here is that you re-enable it by just moving it outside
 ** of the ifdef.
 */
-
-/* CONFIGURE: OpenUDC support ( http://openudc.org ) */
-//#define OPENUDC
 
 /* such cflags SHOULD be set by the cmake/configure OpenUDC options, but if not let's define them here */
 #ifdef OPENUDC
