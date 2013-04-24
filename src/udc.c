@@ -19,14 +19,13 @@
 #include "udc.h"
 #include "libhttpd.h"
 
-/*
- * \return a negative number to finish the connection, or 0 if it have fork.
+/*! manage creation sheet
  */
 void udc_create( httpd_conn* hc ) {
 	size_t c;
 	ssize_t r;
 	char * cp, * boundary;
-	int nsigs=1, boundarylen=0;
+	int i=0, nsigs=1, boundarylen=0;
 
 	gpgme_ctx_t gpglctx;
 	gpgme_error_t gpgerr;
@@ -45,7 +44,7 @@ void udc_create( httpd_conn* hc ) {
 
 	cp=hc->contenttype+sizeof("multipart/msigned")-1;
 
-	while (*cp && *cp != '\n' ) {
+	while (*cp && (*cp != '\n') ) {
 		//syslog( LOG_INFO, " 1- cp: %s", cp );
 		/* find next parameter */
 		cp += strspn( cp, "\" \t;" );
@@ -54,14 +53,15 @@ void udc_create( httpd_conn* hc ) {
 			cp += sizeof("boundary=")-1;
 			cp += strspn( cp, " \t" );
 			if (*cp == '"') {
+			/* if boundary value is protected with "doubles quotes" */
 				cp++;
 				boundary=cp;
-				while ( (*cp != '\0') && (*cp != '"') )
+				while ( *cp && (*cp != '\n') && (*cp != '"') )
 					cp++;
 				boundarylen=( *cp == '"' ? cp-boundary : 0 );
 			} else {
 				boundary=cp;
-				while ( (*cp != ';') && (*cp > '&') && (*cp < 'z') )
+				while ( (*cp != ';') && (*cp >= '&') && (*cp <= 'z') )
 					cp++;
 				boundarylen=cp-boundary;
 			}
@@ -101,12 +101,16 @@ void udc_create( httpd_conn* hc ) {
 		memcpy(buff,&(hc->read_buf[hc->checked_idx]), c);
 	while ( c < hc->contentlength ) {
 		r = read( hc->conn_fd, buff+c, hc->contentlength - c );
-		if ( r < 0 && ( errno == EINTR || errno == EAGAIN ) )
-			{
+		if ( r < 0 && ( errno == EINTR || errno == EAGAIN ) ) {
 			struct timespec tim={0, 300000000}; /* 300 ms */
 			nanosleep(&tim, NULL);
-			continue;
+			if (i++>50) { /* 50*300ms = 15 seconds */
+				httpd_send_err(hc, 408, httpd_err408title, "", httpd_err408form, "" );
+				exit(EXIT_FAILURE);
 			}
+			continue;
+		} else
+			i=0;
 		if ( r <= 0 ) {
 			httpd_send_err(hc, 500, err500title, "", err500form, "read error" );
 			exit(EXIT_FAILURE);
@@ -120,6 +124,8 @@ void udc_create( httpd_conn* hc ) {
 		httpd_send_err(hc, 500, err500title, "", err500form, gpgme_strerror(gpgerr) );
 		exit(EXIT_FAILURE);
 	}
+
+
 
 	/*{
 		send_mime(hc, 200, ok200title, "", "", "text/html; charset=%s",(off_t) -1, hc->sb.st_mtime );
@@ -141,4 +147,4 @@ void udc_validate( httpd_conn* hc ) {
 	//gpgme_release (gpglctx);
 	exit(EXIT_SUCCESS);
 }
-#endif
+#endif /* OPENUDC */
