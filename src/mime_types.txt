@@ -73,6 +73,7 @@ lzh	application/octet-stream
 m3u	audio/x-mpegurl
 man	application/x-troff-man
 mathml	application/mathml+xml
+md	text/x-markdown
 me	application/x-troff-me
 mesh	model/mesh
 mid	audio/midi
