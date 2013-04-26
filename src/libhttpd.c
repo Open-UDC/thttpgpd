@@ -98,7 +98,7 @@ extern char* crypt( const char* key, const char* setting );
 #include "hkp.h"
 #ifdef OPENUDC
 #include "udc.h"
-#endif
+#endif /* OPENUDC */
 
 #ifndef SHUT_WR
 #define SHUT_WR 1
@@ -475,7 +475,7 @@ char* err500form =
 
 char* err501title = "Not Implemented";
 char* err501form =
-	"The requested method '%.80s' is not implemented for this url.\n";
+	"The requested feature '%.80s' is not implemented for this url.\n";
 
 char* httpd_err503title = "Service Temporarily Overloaded";
 char* httpd_err503form =
@@ -1058,7 +1058,7 @@ static int hexit( char c ) {
 	return -1;	
 }
 
-/* Copies and decodes a string.  It's ok for from and to to be the
+/* Copies and decodes a string.  It's ok for 'from' and 'to' to be the
 ** same string. Return the lenght of decoded string.
 */
 int strdecode( char* to, char* from ) {

@@ -84,6 +84,11 @@ void udc_create( httpd_conn* hc ) {
 		exit(EXIT_FAILURE);
 	}
 
+	if ( nsigs < 1 ) {
+		httpd_send_err(hc, 501, err501title, "", err501form, "nsigs < 1" );
+		exit(EXIT_FAILURE);
+	}
+
 	if (hc->contentlength < 12) {
 		httpd_send_err(hc, 411, err411title, "", "Content-Length is absent or too short (%.80s)", "12");
 		exit(EXIT_FAILURE);
