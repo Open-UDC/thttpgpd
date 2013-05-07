@@ -4726,7 +4726,7 @@ test -z "$INSTALL_DATA" && INSTALL_DATA='${INSTALL} -m 644'
 
 
 extrasubdirs=""
-output="Makefile src/Makefile src/ludd_init.sh src/pks/Makefile html_src/Makefile src/ludd.8 src/pks/index.html"
+output="Makefile src/Makefile src/init.sh src/pks/Makefile html_src/Makefile src/manual.8 src/pks/index.html"
 
 # Check whether --enable-jef_cgi was given.
 if test "${enable_jef_cgi+set}" = set; then :

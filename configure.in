@@ -121,7 +121,7 @@ AC_PROG_MAKE_SET
 AC_PROG_INSTALL
 
 extrasubdirs=""
-output="Makefile src/Makefile src/ludd_init.sh src/pks/Makefile html_src/Makefile src/ludd.8 src/pks/index.html"
+output="Makefile src/Makefile src/init.sh src/pks/Makefile html_src/Makefile src/manual.8 src/pks/index.html"
 
 AC_ARG_ENABLE(jef_cgi,
 	[
