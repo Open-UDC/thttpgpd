@@ -249,12 +249,17 @@ port=$myport
 #user=$LUDDUSER
 
 # Specifies a wildcard pattern for CGI programs, for instance "**.cgi" or
-# "/cgi-bin/*". See $SOFTWARE(8) for details.
+# "/cgi-bin/*", or even "**.php" using for example php-fpm and fastcgipass.
+# See $SOFTWARE(8) for details.
 #cgipat=/cgi-bin/*
 
 # Specifies a wildcard exclusion pattern for ressources which should NOT be signed.
 # See $SOFTWARE(8) for details.
 #sigpat=/cgi-bin/*
+
+# Specifies a local or remote socket for fastcgi (php, django-python, ...)
+#fastcgipass=unix:/var/lib/php-fpm/php-fpm.sock
+#fastcgipass=127.0.0.1:9000
 
 # Specifies the maximum number of simultaneous requests which need to call fork().
 # Suchs requests are: the CGI programs, "Accept: multipart/msigned",

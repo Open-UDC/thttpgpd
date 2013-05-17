@@ -22,6 +22,8 @@ thttpgpd is a tiny/turbo/throttling HTTP server with OpenPGP features.
 .IR cgipat ]
 .RB [ -s
 .IR sigpat ]
+.RB [ -F
+.IR fastcgipass ]
 .RB [ -t
 .IR throttles ]
 .RB [ -H
@@ -33,8 +35,8 @@ thttpgpd is a tiny/turbo/throttling HTTP server with OpenPGP features.
 .RB [ -i
 .IR pidfile ]
 .RB [ -nk ]
-.RB [ -f
-.IR fpr ]
+.RB [ -fpr
+.IR keyfingerprint ]
 .RB [ -V ]
 .RB [ -D ]
 .SH DESCRIPTION
@@ -86,6 +88,8 @@ This use the external tool iptables (which have to be in your $PATH and need
 the root privileges).
 If @software@ isn't started as root or if connlimit is not a positive number,
 @software@ won't touch netfilter... and it should be more sensitive to DOS attacks.
+Note: as @software@ use to remove its root privileges, @software@ should
+not be able to clean its netfilter rules itself, then tell how to do it via syslog().
 The config-file option name for this flag is "connlimit",
 and the config.h option is DEFAULT_CONNLIMIT.
 .TP
@@ -109,6 +113,12 @@ the header of client's request).
 See below for details.
 The config-file option name for this flag is "sigpat",
 and the config.h option is SIG_PATTERN.
+.TP
+.B -F
+Specifies a local socket (prefixed by "unix:") or a remote "host:port" to pass
+fastcgi.
+The config-file option name is "fastcgipass".
+Note: UNCOMPLETE IMPLEMENTATION - Doesn't work yet.
 .TP
 .B -t
 Specifies a file of throttle settings.
@@ -145,8 +155,8 @@ The procedure for importing new keys is to write their fingerprint in a creation
 Unless you want to store unused or unknow keys in your keyring, you shouldn't use this.
 The config-file option name for this flag is "newkeys".
 .TP
-.B -f
-Specifies the fingerprint of the OpenPGP key used to identify your server.
+.B -fpr
+Specifies the fingerprint (or the KeyID) of the OpenPGP key used to identify your server.
 This parameter is mandatory. The secret part of the key must be available
 in the gpgme homedir. It should be a valid "ubot1" key.
 To be accepted by other peers, the key should also being signed by

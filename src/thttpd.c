@@ -99,6 +99,7 @@ static char * cgi_pattern = CGI_PATTERN;
 #else /* CGI_PATTERN */
 static char * cgi_pattern = (char*) 0;
 #endif /* CGI_PATTERN */
+static char * fastcgi_pass = (char*) 0;
 #ifdef SIG_EXCLUDE_PATTERN
 static char * sig_pattern = SIG_EXCLUDE_PATTERN;
 #else /* SIG_EXCLUDE_PATTERN */
@@ -799,7 +800,7 @@ main( int argc, char** argv )
 		DIE(1,gpgme_strerror(gpgerr));
 
 	/* get the bot  key */
-	if ( ! myself.fpr || strlen(myself.fpr) != 40 ) 
+	if ( ! myself.fpr || strlen(myself.fpr) < 8 ) 
 		DIE( 1, "Invalid fingerprint %s","(forget "SOFTWARE_NAME"_init.sh ?)");
 
 	gpgerr = gpgme_get_key (main_gpgctx,myself.fpr,&mygpgkey,1);
@@ -1063,6 +1064,11 @@ parse_args( int argc, char** argv )
 			++argn;
 			cgi_pattern = argv[argn];
 			}
+		else if ( strcmp( argv[argn], "-F" ) == 0 && argn + 1 < argc )
+			{
+			++argn;
+			fastcgi_pass = argv[argn];
+			}
 #endif /* CGI_PATTERN */
 #ifdef SIG_EXCLUDE_PATTERN
 		else if ( strcmp( argv[argn], "-s" ) == 0 && argn + 1 < argc )
@@ -1136,6 +1142,7 @@ usage( void )
 			    "	-u USER     user to switch to (if started as root) - default: "DEFAULT_USER"\n"
 #ifdef CGI_PATTERN
 			    "	-c CGIPAT   pattern for CGI programs - default: "CGI_PATTERN"\n"
+			    "	-F SOCKET   Remote or \"unix:\" socket to pass fastcgi - default: fastcgi disabled\n"
 #endif /* CGI_PATTERN */
 #ifdef SIG_EXCLUDE_PATTERN
 			    "	-s SIG!PAT  pattern disabling signed responses - default: "SIG_EXCLUDE_PATTERN"\n"
@@ -1146,7 +1153,7 @@ usage( void )
 			    "	-nk         new (unknow) keys may be added in our keyring through \"pks/add\"\n"
 			    "	-e PORT     external port (to be reach by peers) - default: listenning port\n"
 			    "	-E HOST     external host name or IP adress - default: default hostname\n"
-			    "	-f FPR      fingerprint of the "SOFTWARE_NAME"'s OpenPGP key - no default, MANDATORY\n"
+			    "	-fpr KeyID  fingerprint of the "SOFTWARE_NAME"'s OpenPGP key - no default, MANDATORY\n"
 			    "	-V          show version and exit\n"
 			    "	-D          stay in foreground\n"
 			, argv0, DEFAULT_PORT
@@ -1249,6 +1256,11 @@ static int read_config( char* filename )
 				{
 				value_required( name, value );
 				cgi_pattern = e_strdup( value );
+				}
+			else if ( strcasecmp( name, "fastcgipass" ) == 0 )
+				{
+				value_required( name, value );
+				fastcgi_pass = e_strdup( value );
 				}
 #endif /* CGI_PATTERN */
 			else if ( strcasecmp( name, "cgilimit" ) == 0 )
