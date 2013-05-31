@@ -444,13 +444,6 @@ main( int argc, char** argv )
 	/* Read zone info now, in case we chroot(). */
 	tzset();
 
-	/* Throttle file. */
-	numthrottles = 0;
-	maxthrottles = 0;
-	throttles = (throttletab*) 0;
-	if ( throttlefile != (char*) 0 )
-		read_throttlefile( throttlefile );
-
 	/* "hc[pid]" */
 	hctab.pidmin=getpid()+1;
 	hctab.pidmax=hctab.pidmin+128;
@@ -469,6 +462,25 @@ main( int argc, char** argv )
 		}
 	else
 		pwd = getpwuid(getuid());
+
+	/* Switch directory : the one in parameters, or the $HOME of the user(setuid) if root, or $HOME/.@software@  */
+	if ( dir == (char*) 0 ) {
+		if ( getuid() == 0 ) 
+			dir=(pwd->pw_dir?pwd->pw_dir:".");
+		else {
+			dir=NEW(char,strlen(pwd->pw_dir)+3+strlen(argv0));
+			strcpy(dir,pwd->pw_dir);
+			strcat(dir,"/.");
+			strcat(dir,argv0);
+		}
+	}
+
+	if ( chdir( dir ) < 0 )
+		DIE(1,"chdir %s - %m %s",dir,"(forget "SOFTWARE_NAME"_init.sh ?)");
+
+	if (read_config(DEFAULT_CFILE) < 2)
+		/* if read_config does something: re-parse args which override it */
+		parse_args( argc, argv );
 
 	/* Log file. */
 	if ( logfile != (char*) 0 )
@@ -507,24 +519,12 @@ main( int argc, char** argv )
 	else
 		logfp = (FILE*) 0;
 
-	/* Switch directory : the one in parameters, or the $HOME of the user(setuid) if root, or $HOME/.@software@  */
-	if ( dir == (char*) 0 ) {
-		if ( getuid() == 0 ) 
-			dir=(pwd->pw_dir?pwd->pw_dir:".");
-		else {
-			dir=NEW(char,strlen(pwd->pw_dir)+3+strlen(argv0));
-			strcpy(dir,pwd->pw_dir);
-			strcat(dir,"/.");
-			strcat(dir,argv0);
-		}
-	}
-
-	if ( chdir( dir ) < 0 )
-		DIE(1,"chdir %s - %m %s",dir,"(forget "SOFTWARE_NAME"_init.sh ?)");
-
-	if (read_config(DEFAULT_CFILE) < 2)
-		/* if read_config does something: re-parse args which override it */
-		parse_args( argc, argv );
+	/* Throttle file. */
+	numthrottles = 0;
+	maxthrottles = 0;
+	throttles = (throttletab*) 0;
+	if ( throttlefile != (char*) 0 )
+		read_throttlefile( throttlefile );
 
 	/* Look up hostname now, in case we will chroot(). */
 	lookup_hostname( &sa4, sizeof(sa4), &gotv4, &sa6, sizeof(sa6), &gotv6 );
@@ -1129,17 +1129,17 @@ usage( void )
 	    (void) fprintf( stderr,
 			    "Usage: %s [options]\n"
 			    "Options:\n"
+			    "	-u USER     user to switch to (if started as root) - default: "DEFAULT_USER"\n"
+			    "	-d DIR      running directory - default: %s's home or $HOME/."SOFTWARE_NAME"/\n"
 			    "	-C FILE     config file to use - default: "DEFAULT_CFILE" in running directory\n"
 			    "	-p PORT     listenning port - default: %d\n"
 			    "	-H HOST     host or hostname to bind to - default: all available\n"
-			    "	-d DIR      running directory - default: "DEFAULT_USER"'s home or $HOME/."SOFTWARE_NAME"/\n"
 			    "	-r|-nor     enable/disable chroot - default: disable to make all cgi works\n"
 #if DEFAULT_CONNLIMIT > 0
 			    "	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: %d\n"
 #else /* DEFAULT_CONNLIMIT > 0 */
 			    "	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: no limit\n"
 #endif /* DEFAULT_CONNLIMIT > 0 */
-			    "	-u USER     user to switch to (if started as root) - default: "DEFAULT_USER"\n"
 #ifdef CGI_PATTERN
 			    "	-c CGIPAT   pattern for CGI programs - default: "CGI_PATTERN"\n"
 			    "	-F SOCKET   Remote or \"unix:\" socket to pass fastcgi - default: fastcgi disabled\n"
@@ -1156,7 +1156,7 @@ usage( void )
 			    "	-fpr KeyID  fingerprint of the "SOFTWARE_NAME"'s OpenPGP key - no default, MANDATORY\n"
 			    "	-V          show version and exit\n"
 			    "	-D          stay in foreground\n"
-			, argv0, DEFAULT_PORT
+			, argv0, user, DEFAULT_PORT
 #if DEFAULT_CONNLIMIT > 0
 			, DEFAULT_CONNLIMIT
 #endif /* DEFAULT_CONNLIMIT > 0 */
@@ -1245,11 +1245,6 @@ static int read_config( char* filename )
 				{
 				no_value_required( name, value );
 				hsbfield &= ~HS_PKS_ADD_MERGE_ONLY;
-				}
-			else if ( strcasecmp( name, "user" ) == 0 )
-				{
-				value_required( name, value );
-				user = e_strdup( value );
 				}
 #ifdef CGI_PATTERN
 			else if ( strcasecmp( name, "cgipat" ) == 0 )

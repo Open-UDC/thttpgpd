@@ -244,10 +244,6 @@ port=$myport
 # $SOFTWARE won't touch netfilter... and it should be more sensitive to DOS attacks.
 #connlimit=20
 
-# Specifies what user to switch to after initialization when started as root.
-# It also change the homedir to this user's \$HOME if "dir" is not specified.
-#user=$LUDDUSER
-
 # Specifies a wildcard pattern for CGI programs, for instance "**.cgi" or
 # "/cgi-bin/*", or even "**.php" using for example php-fpm and fastcgipass.
 # See $SOFTWARE(8) for details.

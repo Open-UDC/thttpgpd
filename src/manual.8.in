@@ -5,19 +5,19 @@ ludd (Libre Universal Dividend Deamon) is the first implementation of an OpenUDC
 thttpgpd is a tiny/turbo/throttling HTTP server with OpenPGP features.
 .SH SYNOPSIS
 .B @software@
+.RB [ -u
+.IR user ]
+.RB [ -d
+.IR dir ]
 .RB [ -C
 .IR configfile ]
 .RB [ -p
 .IR port ]
 .RB [ -e
 .IR port ]
-.RB [ -d
-.IR dir ]
 .RB [ -r | -nor ]
 .RB [ -L
 .IR connlimit ]
-.RB [ -u
-.IR user ]
 .RB [ -c
 .IR cgipat ]
 .RB [ -s
@@ -51,9 +51,23 @@ is the http server without OpenUDC support, but only OpenPGP ones. It supports h
 is a fork/update of thttpd-2.25b (unmaintained since 2002) which was a simple, small, fast, and secure HTTP server.
 .SH OPTIONS
 .TP
+.B -u
+Specifies what user to switch to after initialization when started as root.
+The default is "@user@".
+This also change the default running directory, and so the default config-file.
+This option may not be set through a config-file, and the config.h option is DEFAULT_USER.
+.TP
+.B -d
+Specifies a running directory to chdir() to at startup.
+If root, the default is to chdir to the HOME of the user switched to,
+else the default dir is $HOME/.@software@.
+The config-file option name for this flag is "dir",
+the directory should contain expected arborescense (pub dir, gpg keyrings...).
+.TP
 .B -C
 Specifies a config-file to read.
-All options can be set either by command-line flags or in the config file.
+If not specified, @software@ will try @software@.conf in the running directory.
+Almost all options can be set either by command-line flags or in the config file.
 See below for details.
 .TP
 .B -p
@@ -66,13 +80,6 @@ and the config.h option is DEFAULT_PORT.
 Specifies the external port to be reach by other peers.
 The default is to try listenning port.
 The config-file option name for this flag is "eport".
-.TP
-.B -d
-Specifies a directory to chdir() to at startup.
-If root, the default is to chdir to the home of the user switched to,
-else the default dir is $HOME/.@software@.
-The config-file option name for this flag is "dir",
-the directory should contain expected arborescense (pub dir, gpg keyrings...).
 .TP
 .B -r
 Do a chroot() at initialization time, restricting file access
@@ -92,12 +99,6 @@ Note: as @software@ use to remove its root privileges, @software@ should
 not be able to clean its netfilter rules itself, then tell how to do it via syslog().
 The config-file option name for this flag is "connlimit",
 and the config.h option is DEFAULT_CONNLIMIT.
-.TP
-.B -u
-Specifies what user to switch to after initialization when started as root.
-The default is "@user@".
-The config-file option name for this flag is "user",
-and the config.h option is DEFAULT_USER.
 .TP
 .B -c
 Specifies a wildcard pattern for CGI programs, for instance "**.cgi"
@@ -175,7 +176,9 @@ This is necessary when you want to run @software@ wrapped in a little shell
 script that restarts it if it exits.
 .SH "CONFIG-FILE"
 .PP
-All the command-line options can also be set in a config file.
+Except "
+.B -u
+" (user) option, all the command-line options can also be set in a config file.
 One advantage of using a config file is that the file can be changed,
 and @software@ will pick up the changes with a restart.
 .PP
