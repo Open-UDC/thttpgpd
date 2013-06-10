@@ -2919,7 +2919,12 @@ static int mk_path(const char * path) {
 	if (!dir)
 		return(-1);
 
-	cp=strchr(dir,'/');
+	cp=dir;
+
+	while (*cp == '/')
+		cp++;
+
+	cp=strchr(cp,'/');
 	while (cp) {
 		*cp='\0';
 		if ( stat(dir,&std) < 0 && mkdir(dir,0755) < 0) {
@@ -2928,6 +2933,7 @@ static int mk_path(const char * path) {
 			return -1;
 		}
 		*cp='/';
+		//while (*cp == '/') /* Usefull ?? depend how stat manage mutiple ///// ... */
 		cp++;
 		cp=strchr(cp,'/');
 	}
