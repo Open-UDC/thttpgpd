@@ -705,7 +705,7 @@ main( int argc, char** argv )
 	hs = httpd_initialize(
 		hostname,
 		gotv4 ? &sa4 : (httpd_sockaddr*) 0, gotv6 ? &sa6 : (httpd_sockaddr*) 0,
-		port, cgi_pattern, sig_pattern, cgi_limit, cwd, hsbfield, logfp);
+		port, cgi_pattern, fastcgi_pass, sig_pattern, cgi_limit, cwd, hsbfield, logfp);
 	if ( hs == (httpd_server*) 0 )
 		DIE(1,"Could not perform httpd initialization (%m). Exiting");
 

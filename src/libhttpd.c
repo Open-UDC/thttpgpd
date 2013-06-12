@@ -192,8 +192,8 @@ free_httpd_server( httpd_server* hs )
 httpd_server*
 httpd_initialize(
 	char* hostname, httpd_sockaddr* sa4P, httpd_sockaddr* sa6P,
-	unsigned short port, char* cgi_pattern, char* sig_pattern,
-	int cgi_limit, char* cwd, int bfield, FILE* logfp )
+	unsigned short port, char* cgi_pattern, char * fastcgi_pass,
+   	char* sig_pattern, int cgi_limit, char* cwd, int bfield, FILE* logfp )
 	{
 	httpd_server* hs;
 	static char ghnbuf[256];
@@ -242,6 +242,15 @@ httpd_initialize(
 		while ( ( cp = strstr( hs->cgi_pattern, "|/" ) ) != (char*) 0 )
 			(void) strcpy( cp + 1, cp + 2 );
 		}
+
+	if ( fastcgi_pass == (char*) 0 )
+		hs->fastcgi_saddr = (struct sockaddr *) 0;
+	else
+		{
+		hs->fastcgi_saddr = NEW( struct sockaddr, 1 );
+
+		}
+
 	if ( sig_pattern == (char*) 0 )
 		hs->sig_pattern = (char*) 0;
 	else
