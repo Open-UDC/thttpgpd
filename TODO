@@ -1,18 +1,18 @@
 
-- - - - - - - -  high priority - - - - - - - - -
+TO TEST:
 
-almost all (still ... ) 
+ * IPv6: listenning on an IPv6 only interface.
+ * chroot: should no more work since we use gpgme.
+
+
+TODO:
+
+- - - - - - - -  OpenUDC - high priority - - - - - - - - -
+
+ * udc.c: manage creation sheets and transactions.
+
 
 - - - - - - - - HTTP engine - high priority - - - - - - - - -
-
-IPv6 not working right.
-
-Why is the client's IP address showing up in paths?
-
-Fetches with numeric IP addresses and no Host: header are screwing up the
-vhost code?
-143.90.193.229 - - [06/Apr/2000:09:21:34 -0700] "GET /209.133.38.22/software/thttpd/ HTTP/1.0" 200 12093 "http://www.dbphotography.demon.co.uk/index.html" "Mozilla/1.22 (compatible; MSIE 2.0; Windows 95)"
-143.90.193.229 - - [06/Apr/2000:09:21:37 -0700] "GET /143.90.193.229/software/thttpd/anvil_thttpd.gif HTTP/1.0" 403 - "http://www.acme.com/software/thttpd/" "Mozilla/1.22 (compatible; MSIE 2.0; Windows 95)"
 
 Have directory indexing skip files that start with dot?  Except ..?
 In libhttpd.c:
@@ -25,10 +25,10 @@ Add comment on INDEX_NAMES that it should be simple filenames only.
 The error page generated for non-local referers should include the
 original URL as an active link.
 
-Make open in mmc.c use O_NONBLOCK flag, to prevent DOS attack via
-a named pipe?
 
 - - - - - - - - - HTTP engine - later - - - - - - - - -
+
+Re-add error page customization feature (removed previously, cf old thttpd sources).
 
 Document how symlinks interact with .htpasswd - authorization is checked
 on the result of the symlink, and not the origin.
