@@ -171,8 +171,8 @@ static void gpg_data_release_cb(void *handle);
 static void cgi_child( httpd_conn* hc );
 static int cgi( httpd_conn* hc );
 static void make_log_entry(const httpd_conn* hc, time_t now, int status);
-static int sockaddr_check( httpd_sockaddr* saP );
-static size_t sockaddr_len( httpd_sockaddr* saP );
+static inline int sockaddr_check( const struct sockaddr * sa );
+static inline size_t sockaddr_len( const struct sockaddr * sa );
 
 static void
 free_httpd_server( httpd_server* hs )
@@ -1318,7 +1318,7 @@ expand_symlinks( char* path, char** restP, int no_symlink_check )
 int
 httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 	{
-	httpd_sockaddr sa;
+	struct sockaddr sa;
 	socklen_t sz;
 
 	if ( ! hc->initialized )
@@ -1347,7 +1347,7 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 
 	/* Accept the new connection. */
 	sz = sizeof(sa);
-	hc->conn_fd = accept( listen_fd, &sa.sa, &sz );
+	hc->conn_fd = accept( listen_fd, &sa, &sz );
 	if ( hc->conn_fd < 0 )
 		{
 		if ( errno == EWOULDBLOCK )
@@ -1364,7 +1364,7 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 		}
 	(void) fcntl( hc->conn_fd, F_SETFD, 1 );
 	hc->hs = hs;
-	hc->client_addr=httpd_ntoa( &sa );
+	hc->client_addr=get_ip_str(&sa);
 	hc->read_idx = 0;
 	hc->checked_idx = 0;
 	hc->checked_state = CHST_FIRSTWORD;
@@ -3940,42 +3940,37 @@ static void make_log_entry(const httpd_conn* hc, time_t now, int status) {
 
 }
 
-char * httpd_ntoa( httpd_sockaddr * saP ) {
+char *get_ip_str(const struct sockaddr * sa) {
 	char str[MAX(INET6_ADDRSTRLEN,INET_ADDRSTRLEN)+1];
 
-//	switch(sa->sa_family) {
-	switch(saP->sa.sa_family) {
+	switch(sa->sa_family) {
 		case AF_INET:
-//			inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr),str, sizeof(str));
-			inet_ntop(AF_INET, &(saP->sa_in.sin_addr), str, sizeof(str));
+			inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr),str, sizeof(str));
 		break;
 
 		case AF_INET6:
-			//inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr),str, sizeof(str));
-			inet_ntop(AF_INET6, &(saP->sa_in6.sin6_addr), str, sizeof(str));
-			/*if ( IN6_IS_ADDR_V4MAPPED( &saP->sa_in6.sin6_addr ) && strncmp( str, "::ffff:", 7 ) == 0 )
-				// Elide IPv6ish prefix for IPv4 addresses.
+			inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr),str, sizeof(str));
+			// Elide IPv6ish prefix for IPv4 addresses.
+			/*if ( IN6_IS_ADDR_V4MAPPED( &(((struct sockaddr_in6 *)sa)->sin6_addr ) && strncmp( str, "::ffff:", 7 ) == 0 )
 				return strdup(&str[7]); */
 		break;
 
 		default:
 			strncpy(str, "Unknown AF", sizeof(str));
 	}
-return strdup(str);
-
+	return strdup(str);
 }
 
-static inline int sockaddr_check( httpd_sockaddr* saP ) {
-	switch ( saP->sa.sa_family ) {
+static inline int sockaddr_check( const struct sockaddr * sa ) {
+	switch ( sa->sa_family ) {
 		case AF_INET: return 1;
 		case AF_INET6: return 1;
 		default: return 0;
 	}
 }
 
-
-static inline size_t sockaddr_len( httpd_sockaddr* saP ) {
-	switch ( saP->sa.sa_family ) {
+static inline size_t sockaddr_len( const struct sockaddr * sa ) {
+	switch ( sa->sa_family ) {
 		case AF_UNIX: return sizeof(struct sockaddr_un);
 		case AF_INET: return sizeof(struct sockaddr_in);
 		case AF_INET6: return sizeof(struct sockaddr_in6);

@@ -225,7 +225,7 @@ port=$myport
 
 # Specifies a hostname (and so interface) to bind to. The default is to bind to
 # all hostnames supported on the local machine. See $SOFTWARE(8) for details.
-#host=
+#host=:: # tip to force using tcp6 stack, if available.
 
 # Enable new keys to be added through pks/add. Unless you want to store unused or
 # unknow  keys  in  your keyring, you shouldn't use this.

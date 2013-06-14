@@ -39,11 +39,6 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#if defined(AF_INET6) && defined(IN6_IS_ADDR_V4MAPPED)
-#define USE_IPV6
-#endif
-
-
 /* A few convenient defines. */
 
 #ifndef MAX
@@ -57,16 +52,6 @@
 
 
 /* The httpd structs. */
-
-/* A multi-family sockaddr. */
-typedef union {
-	struct sockaddr sa;
-	struct sockaddr_in sa_in;
-#ifdef USE_IPV6
-	struct sockaddr_in6 sa_in6;
-	struct sockaddr_storage sa_stor;
-#endif /* USE_IPV6 */
-	} httpd_sockaddr;
 
 /* A server. */
 typedef struct {
@@ -319,7 +304,7 @@ extern char* httpd_method_str( int method );
 extern void httpd_realloc_str( char** strP, size_t* maxsizeP, size_t size );
 
 /* Format a network socket to a string representation. */
-extern char* httpd_ntoa( httpd_sockaddr* saP );
+extern char * get_ip_str(const struct sockaddr * sa);
 
 /* Set NDELAY mode on a socket. */
 extern void httpd_set_ndelay( int fd );

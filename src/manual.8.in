@@ -67,7 +67,7 @@ the directory should contain expected arborescense (pub dir, gpg keyrings...).
 .B -C
 Specifies a config-file to read.
 If not specified, @software@ will try @software@.conf in the running directory.
-Almost all options can be set either by command-line flags or in the config file.
+Except "-u", all options can be set either by command-line flags or in the config file.
 See below for details.
 .TP
 .B -p
