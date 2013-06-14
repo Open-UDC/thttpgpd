@@ -131,7 +131,7 @@ struct fp2fd_gpg_data_handle {
 
 /* Forwards. */
 static void free_httpd_server( httpd_server* hs );
-static int initialize_listen_socket( httpd_sockaddr* saP );
+static int init_listen_socket(const char * hostname, unsigned short port );
 static void add_response( httpd_conn* hc, char* str );
 static void send_response_tail( httpd_conn* hc );
 static void defang(const char* str, char* dfstr, int dfsize );
@@ -189,12 +189,10 @@ free_httpd_server( httpd_server* hs )
 	}
 
 
-httpd_server*
-httpd_initialize(
-	char* hostname, httpd_sockaddr* sa4P, httpd_sockaddr* sa6P,
-	unsigned short port, char* cgi_pattern, char * fastcgi_pass,
-   	char* sig_pattern, int cgi_limit, char* cwd, int bfield, FILE* logfp )
-	{
+httpd_server* httpd_initialize( char* hostname, unsigned short port,
+	char* cgi_pattern, char * fastcgi_pass, char* sig_pattern,
+	int cgi_limit, char* cwd, int bfield, FILE* logfp ) {
+
 	httpd_server* hs;
 	static char ghnbuf[256];
 	char* cp;
@@ -280,24 +278,12 @@ httpd_initialize(
 	hs->logfp = (FILE*) 0;
 	httpd_set_logfp( hs, logfp );
 
-	/* Initialize listen sockets.  Try v6 first because of a Linux peculiarity;
-	** like some other systems, it has magical v6 sockets that also listen for
-	** v4, but in Linux if you bind a v4 socket first then the v6 bind fails.
-	*/
-	if ( sa6P == (httpd_sockaddr*) 0 )
-		hs->listen6_fd = -1;
-	else
-		hs->listen6_fd = initialize_listen_socket( sa6P );
-	if ( sa4P == (httpd_sockaddr*) 0 )
-		hs->listen4_fd = -1;
-	else
-		hs->listen4_fd = initialize_listen_socket( sa4P );
-	/* If we didn't get any valid sockets, fail. */
-	if ( hs->listen4_fd == -1 && hs->listen6_fd == -1 )
-		{
+	/* Initialize listen socket. */
+	hs->listen_fd = init_listen_socket(hostname,port );
+	if ( hs->listen_fd < 0 ) {
 		free_httpd_server( hs );
 		return (httpd_server*) 0;
-		}
+	}
 
 	init_mime();
 
@@ -309,49 +295,61 @@ httpd_initialize(
 	else
 		syslog(
 			LOG_NOTICE, "%.80s starting on %.80s, port %d", EXPOSED_SERVER_SOFTWARE,
-			httpd_ntoa( hs->listen4_fd != -1 ? sa4P : sa6P ),
+			hostname,
 			(int) hs->port );
 	return hs;
+}
+
+
+static int init_listen_socket(const char * hostname, unsigned short port ) {
+	struct addrinfo hints;
+	struct addrinfo *result, *rp;
+	int listen_fd, s, flags;
+	char service[10];
+
+	if (snprintf(service, sizeof(service), "%d", port)>=sizeof(service))
+		return -1;
+
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_UNSPEC;    	/* Allow IPv4 or IPv6 */
+	hints.ai_socktype = SOCK_STREAM;	/* Sequenced, reliable, connection-based */
+	hints.ai_flags = AI_PASSIVE;    /* For wildcard IP address */
+	hints.ai_protocol = 0;          /* Any protocol */
+	hints.ai_canonname = NULL;
+	hints.ai_addr = NULL;
+	hints.ai_next = NULL;
+
+	s = getaddrinfo(hostname, service, &hints, &result);
+	if (s != 0) {
+		syslog( LOG_CRIT, "getaddrinfo: %s\n", gai_strerror(s));
+		return -1;
 	}
 
+	for (rp = result; rp != NULL; rp = rp->ai_next) {
+		listen_fd = socket(rp->ai_family, rp->ai_socktype,
+		rp->ai_protocol);
+		if (listen_fd == -1)
+			continue;
 
-static int
-initialize_listen_socket( httpd_sockaddr* saP )
-	{
-	int listen_fd;
-	int on, flags;
+		if (bind(listen_fd, rp->ai_addr, rp->ai_addrlen) == 0)
+			break;                  /* Success */
 
-	/* Check sockaddr. */
-	if ( ! sockaddr_check( saP ) )
-		{
-		syslog( LOG_CRIT, "unknown sockaddr family on listen socket" );
+		close(listen_fd);
+	}
+
+	if (rp == NULL) {               /* No address succeeded */
+		syslog(LOG_CRIT, "bind %.80s : %s - %m", hostname, service );
 		return -1;
-		}
+	}
 
-	/* Create socket. */
-	listen_fd = socket( saP->sa.sa_family, SOCK_STREAM, 0 );
-	if ( listen_fd < 0 )
-		{
-		syslog( LOG_CRIT, "socket %.80s - %m", httpd_ntoa( saP ) );
-		return -1;
-		}
-	(void) fcntl( listen_fd, F_SETFD, 1 );
+	freeaddrinfo(result);           /* No longer needed */
 
 	/* Allow reuse of local addresses. */
-	on = 1;
+	s = 1;
 	if ( setsockopt(
-			 listen_fd, SOL_SOCKET, SO_REUSEADDR, (char*) &on,
-			 sizeof(on) ) < 0 )
+			 listen_fd, SOL_SOCKET, SO_REUSEADDR, (char*) &s,
+			 sizeof(s) ) < 0 )
 		syslog( LOG_CRIT, "setsockopt SO_REUSEADDR - %m" );
-
-	/* Bind to it. */
-	if ( bind( listen_fd, &saP->sa, sockaddr_len( saP ) ) < 0 )
-		{
-		syslog(
-			LOG_CRIT, "bind %.80s - %m", httpd_ntoa( saP ) );
-		(void) close( listen_fd );
-		return -1;
-		}
 
 	/* Set the listen file descriptor to no-delay / non-blocking mode. */
 	flags = fcntl( listen_fd, F_GETFL, 0 );
@@ -393,8 +391,7 @@ initialize_listen_socket( httpd_sockaddr* saP )
 #endif /* SO_ACCEPTFILTER */
 
 	return listen_fd;
-	}
-
+}
 
 void
 httpd_set_logfp( httpd_server* hs, FILE* logfp )
@@ -404,30 +401,13 @@ httpd_set_logfp( httpd_server* hs, FILE* logfp )
 	hs->logfp = logfp;
 	}
 
-
 void
 httpd_terminate( httpd_server* hs )
 	{
-	httpd_unlisten( hs );
+	(void) close( hs->listen_fd );
 	if ( hs->logfp != (FILE*) 0 )
 		(void) fclose( hs->logfp );
 	free_httpd_server( hs );
-	}
-
-
-void
-httpd_unlisten( httpd_server* hs )
-	{
-	if ( hs->listen4_fd != -1 )
-		{
-		(void) close( hs->listen4_fd );
-		hs->listen4_fd = -1;
-		}
-	if ( hs->listen6_fd != -1 )
-		{
-		(void) close( hs->listen6_fd );
-		hs->listen6_fd = -1;
-		}
 	}
 
 
@@ -1384,8 +1364,7 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 		}
 	(void) fcntl( hc->conn_fd, F_SETFD, 1 );
 	hc->hs = hs;
-	if (! (hc->client_addr=httpd_ntoa( &sa )) )
-		hc->client_addr="FAIL";
+	hc->client_addr=httpd_ntoa( &sa );
 	hc->read_idx = 0;
 	hc->checked_idx = 0;
 	hc->checked_state = CHST_FIRSTWORD;
@@ -2374,7 +2353,7 @@ static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 
 /*! child_r_start should be call early by the child handling the request */
 static void child_r_start(httpd_conn* hc) {
-	httpd_unlisten( hc->hs );
+	(void) close( hc->hs->listen_fd );
 
 	/* set signals to default behavior. */
 #ifdef HAVE_SIGSET
@@ -3961,52 +3940,48 @@ static void make_log_entry(const httpd_conn* hc, time_t now, int status) {
 
 }
 
-char*
-httpd_ntoa( httpd_sockaddr* saP ) {
-#ifdef USE_IPV6
-	char str[200];
+char * httpd_ntoa( httpd_sockaddr * saP ) {
+	char str[MAX(INET6_ADDRSTRLEN,INET_ADDRSTRLEN)+1];
 
-	if ( getnameinfo( &saP->sa, sockaddr_len( saP ), str, sizeof(str), 0, 0, NI_NUMERICHOST ) != 0 )
-		 return strdup("?");
-	else if ( IN6_IS_ADDR_V4MAPPED( &saP->sa_in6.sin6_addr ) && strncmp( str, "::ffff:", 7 ) == 0 )
-		/* Elide IPv6ish prefix for IPv4 addresses. */
-		return strdup(&str[7]);
-	else
-		return strdup(str);
+//	switch(sa->sa_family) {
+	switch(saP->sa.sa_family) {
+		case AF_INET:
+//			inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr),str, sizeof(str));
+			inet_ntop(AF_INET, &(saP->sa_in.sin_addr), str, sizeof(str));
+		break;
 
-#else /* USE_IPV6 */
-	return strdup(inet_ntoa( saP->sa_in.sin_addr ));
-#endif /* USE_IPV6 */
+		case AF_INET6:
+			//inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr),str, sizeof(str));
+			inet_ntop(AF_INET6, &(saP->sa_in6.sin6_addr), str, sizeof(str));
+			/*if ( IN6_IS_ADDR_V4MAPPED( &saP->sa_in6.sin6_addr ) && strncmp( str, "::ffff:", 7 ) == 0 )
+				// Elide IPv6ish prefix for IPv4 addresses.
+				return strdup(&str[7]); */
+		break;
+
+		default:
+			strncpy(str, "Unknown AF", sizeof(str));
+	}
+return strdup(str);
+
 }
 
-static int
-sockaddr_check( httpd_sockaddr* saP )
-	{
-	switch ( saP->sa.sa_family )
-		{
+static inline int sockaddr_check( httpd_sockaddr* saP ) {
+	switch ( saP->sa.sa_family ) {
 		case AF_INET: return 1;
-#ifdef USE_IPV6
 		case AF_INET6: return 1;
-#endif /* USE_IPV6 */
-		default:
-		return 0;
-		}
+		default: return 0;
 	}
+}
 
 
-static size_t
-sockaddr_len( httpd_sockaddr* saP )
-	{
-	switch ( saP->sa.sa_family )
-		{
+static inline size_t sockaddr_len( httpd_sockaddr* saP ) {
+	switch ( saP->sa.sa_family ) {
+		case AF_UNIX: return sizeof(struct sockaddr_un);
 		case AF_INET: return sizeof(struct sockaddr_in);
-#ifdef USE_IPV6
 		case AF_INET6: return sizeof(struct sockaddr_in6);
-#endif /* USE_IPV6 */
-		default:
-		return 0;		/* shouldn't happen */
-		}
+		default: return 0;		/* shouldn't happen */
 	}
+}
 
 #ifndef HAVE_DPRINTF
 /* Some systems don't have dprintf(), so we make our own...

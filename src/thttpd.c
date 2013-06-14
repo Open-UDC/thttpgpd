@@ -182,7 +182,6 @@ static int read_config( char* filename );
 static void value_required( char* name, char* value );
 static void no_value_required( char* name, char* value );
 static char* e_strdup( char* oldstr );
-static void lookup_hostname( httpd_sockaddr* sa4P, size_t sa4_len, int* gotv4P, httpd_sockaddr* sa6P, size_t sa6_len, int* gotv6P );
 static void read_throttlefile( char* throttlefile );
 static void shut_down( void );
 static int handle_newconnect( struct timeval* tvP, int listen_fd );
@@ -419,9 +418,6 @@ main( int argc, char** argv )
 	int cnum;
 	connecttab *c;
 	httpd_conn *hc;
-	httpd_sockaddr sa4;
-	httpd_sockaddr sa6;
-	int gotv4, gotv6;
 	struct timeval tv;
 	struct stat stf;
 
@@ -525,11 +521,6 @@ main( int argc, char** argv )
 	throttles = (throttletab*) 0;
 	if ( throttlefile != (char*) 0 )
 		read_throttlefile( throttlefile );
-
-	/* Look up hostname now, in case we will chroot(). */
-	lookup_hostname( &sa4, sizeof(sa4), &gotv4, &sa6, sizeof(sa6), &gotv6 );
-	if ( ! ( gotv4 || gotv6 ) )
-		DIE(1, "can't find any valid address" );
 
 	/* if we are root make sure that directory is owned by the specified user */
 	if ( getuid() == 0 ) {
@@ -702,10 +693,8 @@ main( int argc, char** argv )
 	/* Initialize the HTTP layer.  Got to do this before giving up root,
 	** so that we can bind to a privileged port.
 	*/
-	hs = httpd_initialize(
-		hostname,
-		gotv4 ? &sa4 : (httpd_sockaddr*) 0, gotv6 ? &sa6 : (httpd_sockaddr*) 0,
-		port, cgi_pattern, fastcgi_pass, sig_pattern, cgi_limit, cwd, hsbfield, logfp);
+	hs = httpd_initialize(hostname, port, cgi_pattern, fastcgi_pass,
+			sig_pattern, cgi_limit, cwd, hsbfield, logfp);
 	if ( hs == (httpd_server*) 0 )
 		DIE(1,"Could not perform httpd initialization (%m). Exiting");
 
@@ -894,12 +883,7 @@ main( int argc, char** argv )
 	httpd_conn_count = 0;
 
 	if ( hs != (httpd_server*) 0 )
-		{
-		if ( hs->listen4_fd != -1 )
-			fdwatch_add_fd( hs->listen4_fd, (void*) 0, FDW_READ );
-		if ( hs->listen6_fd != -1 )
-			fdwatch_add_fd( hs->listen6_fd, (void*) 0, FDW_READ );
-		}
+		fdwatch_add_fd( hs->listen_fd, (void*) 0, FDW_READ );
 
 	/* We will now only use syslog if some errors happen, so close stderr */
     warnx("started successfully ! (pid [%d], messages are now sent to syslog only)",getpid());
@@ -937,20 +921,9 @@ main( int argc, char** argv )
 		//if (tv.tv_sec%86400 < 600)... /* (just an idea if need to launch daily jobs) */
 
 		/* Is it a new connection? */
-		if ( hs != (httpd_server*) 0 && hs->listen6_fd != -1 &&
-			 fdwatch_check_fd( hs->listen6_fd ) )
+		if ( hs != (httpd_server*) 0 && fdwatch_check_fd( hs->listen_fd ) )
 			{
-			if ( handle_newconnect( &tv, hs->listen6_fd ) )
-				/* Go around the loop and do another fdwatch, rather than
-				** dropping through and processing existing connections.
-				** New connections always get priority.
-				*/
-				continue;
-			}
-		if ( hs != (httpd_server*) 0 && hs->listen4_fd != -1 &&
-			 fdwatch_check_fd( hs->listen4_fd ) )
-			{
-			if ( handle_newconnect( &tv, hs->listen4_fd ) )
+			if ( handle_newconnect( &tv, hs->listen_fd ) )
 				/* Go around the loop and do another fdwatch, rather than
 				** dropping through and processing existing connections.
 				** New connections always get priority.
@@ -982,11 +955,8 @@ main( int argc, char** argv )
 			terminate = 1;
 			if ( hs != (httpd_server*) 0 )
 				{
-				if ( hs->listen4_fd != -1 )
-					fdwatch_del_fd( hs->listen4_fd );
-				if ( hs->listen6_fd != -1 )
-					fdwatch_del_fd( hs->listen6_fd );
-				httpd_unlisten( hs );
+				fdwatch_del_fd( hs->listen_fd );
+				(void) close( hs->listen_fd );
 				}
 			}
 
@@ -1358,140 +1328,6 @@ e_strdup( char* oldstr )
 
 
 static void
-lookup_hostname( httpd_sockaddr* sa4P, size_t sa4_len, int* gotv4P, httpd_sockaddr* sa6P, size_t sa6_len, int* gotv6P )
-	{
-#ifdef USE_IPV6
-
-	struct addrinfo hints;
-	char portstr[10];
-	int gaierr;
-	struct addrinfo* ai;
-	struct addrinfo* ai2;
-	struct addrinfo* aiv6;
-	struct addrinfo* aiv4;
-
-	(void) memset( &hints, 0, sizeof(hints) );
-	hints.ai_family = PF_UNSPEC;
-	hints.ai_flags = AI_PASSIVE;
-	hints.ai_socktype = SOCK_STREAM;
-	(void) snprintf( portstr, sizeof(portstr), "%d", (int) port );
-	if ( (gaierr = getaddrinfo( hostname, portstr, &hints, &ai )) != 0 )
-		{
-		syslog(
-			LOG_CRIT, "getaddrinfo %.80s - %.80s",
-			hostname, gai_strerror( gaierr ) );
-		(void) fprintf(
-			stderr, "%s: getaddrinfo %s - %s\n",
-			argv0, hostname, gai_strerror( gaierr ) );
-		exit( 1 );
-		}
-
-	/* Find the first IPv6 and IPv4 entries. */
-	aiv6 = (struct addrinfo*) 0;
-	aiv4 = (struct addrinfo*) 0;
-	for ( ai2 = ai; ai2 != (struct addrinfo*) 0; ai2 = ai2->ai_next )
-		{
-		switch ( ai2->ai_family )
-			{
-			case AF_INET6:
-			if ( aiv6 == (struct addrinfo*) 0 )
-				aiv6 = ai2;
-			break;
-			case AF_INET:
-			if ( aiv4 == (struct addrinfo*) 0 )
-				aiv4 = ai2;
-			break;
-			}
-		}
-
-	if ( aiv6 == (struct addrinfo*) 0 )
-		*gotv6P = 0;
-	else
-		{
-		if ( sa6_len < aiv6->ai_addrlen )
-			{
-			syslog(
-				LOG_CRIT, "%.80s - sockaddr too small (%lu < %lu)",
-				hostname, (unsigned long) sa6_len,
-				(unsigned long) aiv6->ai_addrlen );
-			exit( 1 );
-			}
-		(void) memset( sa6P, 0, sa6_len );
-		(void) memmove( sa6P, aiv6->ai_addr, aiv6->ai_addrlen );
-		*gotv6P = 1;
-		}
-
-	if ( aiv4 == (struct addrinfo*) 0 )
-		*gotv4P = 0;
-	else
-		{
-		if ( sa4_len < aiv4->ai_addrlen )
-			{
-			syslog(
-				LOG_CRIT, "%.80s - sockaddr too small (%lu < %lu)",
-				hostname, (unsigned long) sa4_len,
-				(unsigned long) aiv4->ai_addrlen );
-			exit( 1 );
-			}
-		(void) memset( sa4P, 0, sa4_len );
-		(void) memmove( sa4P, aiv4->ai_addr, aiv4->ai_addrlen );
-		*gotv4P = 1;
-		}
-
-	freeaddrinfo( ai );
-
-#else /* USE_IPV6 */
-
-	struct hostent* he;
-
-	*gotv6P = 0;
-
-	(void) memset( sa4P, 0, sa4_len );
-	sa4P->sa.sa_family = AF_INET;
-	if ( hostname == (char*) 0 )
-		sa4P->sa_in.sin_addr.s_addr = htonl( INADDR_ANY );
-	else
-		{
-		sa4P->sa_in.sin_addr.s_addr = inet_addr( hostname );
-		if ( (int) sa4P->sa_in.sin_addr.s_addr == -1 )
-			{
-			he = gethostbyname( hostname );
-			if ( he == (struct hostent*) 0 )
-				{
-#ifdef HAVE_HSTRERROR
-				syslog(
-					LOG_CRIT, "gethostbyname %.80s - %.80s",
-					hostname, hstrerror( h_errno ) );
-				(void) fprintf(
-					stderr, "%s: gethostbyname %s - %s\n",
-					argv0, hostname, hstrerror( h_errno ) );
-#else /* HAVE_HSTRERROR */
-				syslog( LOG_CRIT, "gethostbyname %.80s failed", hostname );
-				(void) fprintf(
-					stderr, "%s: gethostbyname %s failed\n", argv0, hostname );
-#endif /* HAVE_HSTRERROR */
-				exit( 1 );
-				}
-			if ( he->h_addrtype != AF_INET )
-				{
-				syslog( LOG_CRIT, "%.80s - non-IP network address", hostname );
-				(void) fprintf(
-					stderr, "%s: %s - non-IP network address\n",
-					argv0, hostname );
-				exit( 1 );
-				}
-			(void) memmove(
-				&sa4P->sa_in.sin_addr.s_addr, he->h_addr, he->h_length );
-			}
-		}
-	sa4P->sa_in.sin_port = htons( port );
-	*gotv4P = 1;
-
-#endif /* USE_IPV6 */
-	}
-
-
-static void
 read_throttlefile( char* throttlefile )
 	{
 	FILE* fp;
@@ -1614,10 +1450,7 @@ shut_down( void )
 		{
 		httpd_server* ths = hs;
 		hs = (httpd_server*) 0;
-		if ( ths->listen4_fd != -1 )
-			fdwatch_del_fd( ths->listen4_fd );
-		if ( ths->listen6_fd != -1 )
-			fdwatch_del_fd( ths->listen6_fd );
+		fdwatch_del_fd( ths->listen_fd );
 		httpd_terminate( ths );
 		}
 	mmc_destroy();

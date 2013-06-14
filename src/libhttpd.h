@@ -34,6 +34,7 @@
 #include <sys/time.h>
 #include <sys/param.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -77,7 +78,7 @@ typedef struct {
 	char* sig_pattern;
 	int cgi_limit, cgi_count;
 	char* cwd;
-	int listen4_fd, listen6_fd;
+	int listen_fd;
 	int bfield;
 	FILE* logfp;
 	} httpd_server;
@@ -193,16 +194,12 @@ extern int strdecode( char* to, char* from );
 ** httpd_server* which includes a socket fd that you can select() on.
 ** Return (httpd_server*) 0 on error.
 */
-extern httpd_server* httpd_initialize(
-	char* hostname, httpd_sockaddr* sa4P, httpd_sockaddr* sa6P,
+extern httpd_server* httpd_initialize( char* hostname,
 	unsigned short port, char* cgi_pattern, char * fastcgi_pass,
 	char* sig_pattern, int cgi_limit, char* cwd, int bfield, FILE* logfp);
 
 /* Change the log file. */
 extern void httpd_set_logfp( httpd_server* hs, FILE* logfp );
-
-/* Call to unlisten/close socket(s) listening for new connections. */
-extern void httpd_unlisten( httpd_server* hs );
 
 /* Call to shut down. */
 extern void httpd_terminate( httpd_server* hs );
