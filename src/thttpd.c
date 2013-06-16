@@ -414,8 +414,7 @@ main( int argc, char** argv )
 	struct passwd *pwd;
 	char cwd[MAXPATHLEN+1];
 	FILE *logfp;
-	int num_ready;
-	int cnum;
+	int num_ready, cnum, i, cont;
 	connecttab *c;
 	httpd_conn *hc;
 	struct timeval tv;
@@ -883,7 +882,8 @@ main( int argc, char** argv )
 	httpd_conn_count = 0;
 
 	if ( hs != (httpd_server*) 0 )
-		fdwatch_add_fd( hs->listen_fd, (void*) 0, FDW_READ );
+		for ( i=0 ; i<SIZEOFARRAY(hs->listen_fds) && hs->listen_fds[i]>=0 ; i++ )
+				fdwatch_add_fd( hs->listen_fds[i], (void*) 0, FDW_READ );
 
 	/* We will now only use syslog if some errors happen, so close stderr */
     warnx("started successfully ! (pid [%d], messages are now sent to syslog only)",getpid());
@@ -921,15 +921,21 @@ main( int argc, char** argv )
 		//if (tv.tv_sec%86400 < 600)... /* (just an idea if need to launch daily jobs) */
 
 		/* Is it a new connection? */
-		if ( hs != (httpd_server*) 0 && fdwatch_check_fd( hs->listen_fd ) )
-			{
-			if ( handle_newconnect( &tv, hs->listen_fd ) )
+		if ( hs != (httpd_server*) 0 ) {
+			cont=0;
+			for (i=0;i<SIZEOFARRAY(hs->listen_fds) && hs->listen_fds[i]>=0 && fdwatch_check_fd( hs->listen_fds[i] );i++) {
+				if ( handle_newconnect( &tv, hs->listen_fds[i] ) ) {
+					cont=1;
+					break;
 				/* Go around the loop and do another fdwatch, rather than
 				** dropping through and processing existing connections.
 				** New connections always get priority.
 				*/
-				continue;
+				}
 			}
+			if (cont)
+				continue;
+		}
 
 		/* Find the connections that need servicing. */
 		while ( ( c = (connecttab*) fdwatch_get_next_client_data() ) != (connecttab*) -1 )
@@ -955,8 +961,9 @@ main( int argc, char** argv )
 			terminate = 1;
 			if ( hs != (httpd_server*) 0 )
 				{
-				fdwatch_del_fd( hs->listen_fd );
-				(void) close( hs->listen_fd );
+				for ( i=0 ; i<SIZEOFARRAY(hs->listen_fds) && hs->listen_fds[i]>=0 ; i++ )
+						fdwatch_del_fd( hs->listen_fds[i] );
+				httpd_unlisten( hs );
 				}
 			}
 
@@ -1421,7 +1428,7 @@ read_throttlefile( char* throttlefile )
 static void
 shut_down( void )
 	{
-	int cnum;
+	int cnum, i;
 	struct timeval tv;
 
 	/* childs's gentle kill */
@@ -1450,7 +1457,8 @@ shut_down( void )
 		{
 		httpd_server* ths = hs;
 		hs = (httpd_server*) 0;
-		fdwatch_del_fd( ths->listen_fd );
+		for ( i=0 ; i<SIZEOFARRAY(ths->listen_fds) && ths->listen_fds[i]>=0 ; i++ )
+				fdwatch_del_fd( ths->listen_fds[i] );
 		httpd_terminate( ths );
 		}
 	mmc_destroy();
@@ -1473,6 +1481,10 @@ shut_down( void )
 
 	}
 
+/*
+ * \return 1 if there is no more connection to accept for now, else 0
+ * \note may exit() !
+ */
 static int
 handle_newconnect( struct timeval* tvP, int listen_fd )
 	{

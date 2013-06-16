@@ -131,7 +131,7 @@ struct fp2fd_gpg_data_handle {
 
 /* Forwards. */
 static void free_httpd_server( httpd_server* hs );
-static int init_listen_socket(const char * hostname, unsigned short port );
+static int init_listen_sockets(const char * hostname, unsigned short port, int * listen_fds,  size_t size);
 static void add_response( httpd_conn* hc, char* str );
 static void send_response_tail( httpd_conn* hc );
 static void defang(const char* str, char* dfstr, int dfsize );
@@ -278,9 +278,8 @@ httpd_server* httpd_initialize( char* hostname, unsigned short port,
 	hs->logfp = (FILE*) 0;
 	httpd_set_logfp( hs, logfp );
 
-	/* Initialize listen socket. */
-	hs->listen_fd = init_listen_socket(hostname,port );
-	if ( hs->listen_fd < 0 ) {
+	/* Initialize listen sockets. */
+	if ( init_listen_sockets(hostname, port, hs->listen_fds, SIZEOFARRAY(hs->listen_fds))  < 0 ) {
 		free_httpd_server( hs );
 		return (httpd_server*) 0;
 	}
@@ -300,15 +299,20 @@ httpd_server* httpd_initialize( char* hostname, unsigned short port,
 	return hs;
 }
 
-
-static int init_listen_socket(const char * hostname, unsigned short port ) {
+/*
+ * \return The number of listening socket (1 to nmemb) if success, -1 on error.
+ */
+static int init_listen_sockets(const char * hostname, unsigned short port, int * listen_fds,  size_t nmemb) {
 	struct addrinfo hints;
 	struct addrinfo *result, *rp;
-	int listen_fd, s, flags;
+	int s, flags, i;
 	char service[10];
 
 	if (snprintf(service, sizeof(service), "%d", port)>=sizeof(service))
 		return -1;
+
+	for (i=0;i<nmemb;i++)
+		listen_fds[i]=-1;
 
 	memset(&hints, 0, sizeof(struct addrinfo));
 	hints.ai_family = AF_UNSPEC;    	/* Allow IPv4 or IPv6 */
@@ -325,72 +329,80 @@ static int init_listen_socket(const char * hostname, unsigned short port ) {
 		return -1;
 	}
 
-	for (rp = result; rp != NULL; rp = rp->ai_next) {
-		listen_fd = socket(rp->ai_family, rp->ai_socktype,
+	for (i=0, rp = result;i<nmemb && rp != NULL; rp = rp->ai_next) {
+		listen_fds[i] = socket(rp->ai_family, rp->ai_socktype,
 		rp->ai_protocol);
-		if (listen_fd == -1)
+		if (listen_fds[i] == -1)
 			continue;
 
-		if (bind(listen_fd, rp->ai_addr, rp->ai_addrlen) == 0)
-			break;                  /* Success */
-
-		close(listen_fd);
-	}
-
-	if (rp == NULL) {               /* No address succeeded */
-		syslog(LOG_CRIT, "bind %.80s : %s - %m", hostname, service );
-		return -1;
+		if (bind(listen_fds[i], rp->ai_addr, rp->ai_addrlen) == 0)
+			i++ ; 	/* Success */
+		else {
+			char * str=get_ip_str(rp->ai_addr);
+			syslog(LOG_WARNING, "bind [%.80s]:%.80s - %m", str, service );
+			free(str);
+			close(listen_fds[i]);
+			listen_fds[i] = -1;
+		}
 	}
 
 	freeaddrinfo(result);           /* No longer needed */
 
-	/* Allow reuse of local addresses. */
-	s = 1;
-	if ( setsockopt(
-			 listen_fd, SOL_SOCKET, SO_REUSEADDR, (char*) &s,
-			 sizeof(s) ) < 0 )
-		syslog( LOG_CRIT, "setsockopt SO_REUSEADDR - %m" );
-
-	/* Set the listen file descriptor to no-delay / non-blocking mode. */
-	flags = fcntl( listen_fd, F_GETFL, 0 );
-	if ( flags == -1 )
-		{
-		syslog( LOG_CRIT, "fcntl F_GETFL - %m" );
-		(void) close( listen_fd );
+	if (listen_fds[0] < 0) {
+		/* No address succeeded */
+		syslog(LOG_CRIT, "init_listen_sockets(%.80s,%d,,%d) : No address succeeded", hostname, port, nmemb );
 		return -1;
-		}
-	if ( fcntl( listen_fd, F_SETFL, flags | O_NDELAY ) < 0 )
-		{
-		syslog( LOG_CRIT, "fcntl O_NDELAY - %m" );
-		(void) close( listen_fd );
-		return -1;
-		}
+	}
 
-	/* Start a listen going. */
-	if ( listen( listen_fd, LISTEN_BACKLOG ) < 0 )
-		{
-		syslog( LOG_CRIT, "listen - %m" );
-		(void) close( listen_fd );
-		return -1;
-		}
+	for (i=0;i<nmemb && listen_fds[i]>=0;i++) { 
+		/* Allow reuse of local addresses. */
+		s = 1;
+		if ( setsockopt(
+				 listen_fds[i], SOL_SOCKET, SO_REUSEADDR, (char*) &s,
+				 sizeof(s) ) < 0 )
+			syslog( LOG_CRIT, "setsockopt SO_REUSEADDR - %m" );
 
-	/* Use accept filtering, if available. */
+		/* Set the listen file descriptor to no-delay / non-blocking mode. */
+		flags = fcntl( listen_fds[i], F_GETFL, 0 );
+		if ( flags == -1 )
+			{
+			syslog( LOG_CRIT, "fcntl F_GETFL - %m" );
+			(void) close( listen_fds[i] );
+			return -1;
+			}
+		if ( fcntl( listen_fds[i], F_SETFL, flags | O_NDELAY ) < 0 )
+			{
+			syslog( LOG_CRIT, "fcntl O_NDELAY - %m" );
+			(void) close( listen_fds[i] );
+			return -1;
+			}
+
+		/* Start a listen going. */
+		if ( listen( listen_fds[i], LISTEN_BACKLOG ) < 0 )
+			{
+			syslog( LOG_CRIT, "listen - %m" );
+			(void) close( listen_fds[i] );
+			return -1;
+			}
+
+		/* Use accept filtering, if available. */
 #ifdef SO_ACCEPTFILTER
-	{
+		{
 #if ( __FreeBSD_version >= 411000 )
 #define ACCEPT_FILTER_NAME "httpready"
 #else
 #define ACCEPT_FILTER_NAME "dataready"
 #endif
-	struct accept_filter_arg af;
-	(void) bzero( &af, sizeof(af) );
-	(void) strcpy( af.af_name, ACCEPT_FILTER_NAME );
-	(void) setsockopt(
-		listen_fd, SOL_SOCKET, SO_ACCEPTFILTER, (char*) &af, sizeof(af) );
-	}
+		struct accept_filter_arg af;
+		(void) bzero( &af, sizeof(af) );
+		(void) strcpy( af.af_name, ACCEPT_FILTER_NAME );
+		(void) setsockopt(
+			listen_fds[i], SOL_SOCKET, SO_ACCEPTFILTER, (char*) &af, sizeof(af) );
+		}
 #endif /* SO_ACCEPTFILTER */
+	}
 
-	return listen_fd;
+	return i;
 }
 
 void
@@ -404,11 +416,22 @@ httpd_set_logfp( httpd_server* hs, FILE* logfp )
 void
 httpd_terminate( httpd_server* hs )
 	{
-	(void) close( hs->listen_fd );
+	httpd_unlisten( hs );
 	if ( hs->logfp != (FILE*) 0 )
 		(void) fclose( hs->logfp );
 	free_httpd_server( hs );
 	}
+
+/* Call to unlisten/close socket(s) listening for new connections. */
+void httpd_unlisten( httpd_server* hs ) {
+	int i;
+
+	for (i=0;i<SIZEOFARRAY(hs->listen_fds);i++)
+		if (hs->listen_fds[i]>=0) {
+			(void) close( hs->listen_fds[i] );
+			hs->listen_fds[i]=-1;
+		}
+}
 
 
 /* Conditional macro to allow two alternate forms for use in the built-in
@@ -2126,12 +2149,9 @@ struct mime_entry {
 static struct mime_entry enc_tab[] = {
 #include "mime_encodings.h"
 	};
-static const int n_enc_tab = sizeof(enc_tab) / sizeof(*enc_tab);
 static struct mime_entry typ_tab[] = {
 #include "mime_types.h"
 	};
-static const int n_typ_tab = sizeof(typ_tab) / sizeof(*typ_tab);
-
 
 /* qsort comparison routine. */
 static int ext_compare(struct mime_entry* a,struct mime_entry* b ) {
@@ -2145,16 +2165,16 @@ init_mime( void )
 	int i;
 
 	/* Sort the tables so we can do binary search. */
-	qsort( enc_tab, n_enc_tab, sizeof(*enc_tab),(int(*)(const void *, const void *)) ext_compare );
-	qsort( typ_tab, n_typ_tab, sizeof(*typ_tab),(int(*)(const void *, const void *)) ext_compare );
+	qsort( enc_tab, SIZEOFARRAY(enc_tab), sizeof(*enc_tab),(int(*)(const void *, const void *)) ext_compare );
+	qsort( typ_tab, SIZEOFARRAY(typ_tab), sizeof(*typ_tab),(int(*)(const void *, const void *)) ext_compare );
 
 	/* Fill in the lengths. */
-	for ( i = 0; i < n_enc_tab; ++i )
+	for ( i = 0; i < SIZEOFARRAY(enc_tab); ++i )
 		{
 		enc_tab[i].ext_len = strlen( enc_tab[i].ext );
 		enc_tab[i].val_len = strlen( enc_tab[i].val );
 		}
-	for ( i = 0; i < n_typ_tab; ++i )
+	for ( i = 0; i < SIZEOFARRAY(typ_tab); ++i )
 		{
 		typ_tab[i].ext_len = strlen( typ_tab[i].ext );
 		typ_tab[i].val_len = strlen( typ_tab[i].val );
@@ -2198,11 +2218,11 @@ figure_mime( httpd_conn* hc )
 		/* Search the encodings table.  Linear search is fine here, there
 		** are only a few entries.
 		*/
-		for ( i = 0; i < n_enc_tab; ++i )
+		for ( i = 0; i < SIZEOFARRAY(enc_tab); ++i )
 			{
 			if ( ext_len == enc_tab[i].ext_len && strncasecmp( ext, enc_tab[i].ext, ext_len ) == 0 )
 				{
-				if ( n_me_indexes < sizeof(me_indexes)/sizeof(*me_indexes) )
+				if ( n_me_indexes < SIZEOFARRAY(me_indexes) )
 					{
 					me_indexes[n_me_indexes] = i;
 					++n_me_indexes;
@@ -2217,7 +2237,7 @@ figure_mime( httpd_conn* hc )
 		}
 
 	/* Binary search for a matching type extension. */
-	top = n_typ_tab - 1;
+	top = SIZEOFARRAY(typ_tab) - 1;
 	bot = 0;
 	while ( top >= bot )
 		{
@@ -2353,7 +2373,8 @@ static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 
 /*! child_r_start should be call early by the child handling the request */
 static void child_r_start(httpd_conn* hc) {
-	(void) close( hc->hs->listen_fd );
+
+	httpd_unlisten( hc->hs ); 
 
 	/* set signals to default behavior. */
 #ifdef HAVE_SIGSET
@@ -3616,7 +3637,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 			}
 
 		/* Check for an index file. */
-		for ( i = 0; i < sizeof(index_names) / sizeof(char*); ++i )
+		for ( i = 0; i < SIZEOFARRAY(index_names); ++i )
 			{
 			httpd_realloc_str(
 				&indexname, &maxindexname,

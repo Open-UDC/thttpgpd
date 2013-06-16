@@ -50,6 +50,7 @@
 #define NEW(t,n) ((t*) malloc( sizeof(t) * (n) ))
 #define RENEW(o,t,n) ((t*) realloc( (void*) o, sizeof(t) * (n) ))
 
+#define SIZEOFARRAY(array) ( sizeof((array))/sizeof((array)[0]) )
 
 /* The httpd structs. */
 
@@ -63,7 +64,7 @@ typedef struct {
 	char* sig_pattern;
 	int cgi_limit, cgi_count;
 	char* cwd;
-	int listen_fd;
+	int listen_fds[4];
 	int bfield;
 	FILE* logfp;
 	} httpd_server;
@@ -189,6 +190,8 @@ extern void httpd_set_logfp( httpd_server* hs, FILE* logfp );
 /* Call to shut down. */
 extern void httpd_terminate( httpd_server* hs );
 
+/* Call to unlisten/close socket(s) listening for new connections. */
+extern void httpd_unlisten( httpd_server* hs );
 
 /* When a listen fd is ready to read, call this.  It does the accept() and
 ** returns an httpd_conn* which includes the fd to read the request from and
