@@ -279,7 +279,7 @@ httpd_server* httpd_initialize( char* hostname, unsigned short port,
 	httpd_set_logfp( hs, logfp );
 
 	/* Initialize listen sockets. */
-	if ( init_listen_sockets(hostname, port, hs->listen_fds, SIZEOFARRAY(hs->listen_fds))  < 0 ) {
+	if ( init_listen_sockets(hostname, port, hs->listen_fds, SIZEOFARRAY(hs->listen_fds))  < 1 ) {
 		free_httpd_server( hs );
 		return (httpd_server*) 0;
 	}
@@ -329,7 +329,7 @@ static int init_listen_sockets(const char * hostname, unsigned short port, int *
 		return -1;
 	}
 
-	for (i=0, rp = result;i<nmemb && rp != NULL; rp = rp->ai_next) {
+	for (i=0, rp = result;i<(nmemb-1) && rp != NULL; rp = rp->ai_next) {
 		listen_fds[i] = socket(rp->ai_family, rp->ai_socktype,
 		rp->ai_protocol);
 		if (listen_fds[i] == -1)
@@ -354,7 +354,7 @@ static int init_listen_sockets(const char * hostname, unsigned short port, int *
 		return -1;
 	}
 
-	for (i=0;i<nmemb && listen_fds[i]>=0;i++) { 
+	for (i=0;listen_fds[i]>=0;i++) { 
 		/* Allow reuse of local addresses. */
 		s = 1;
 		if ( setsockopt(
@@ -426,11 +426,10 @@ httpd_terminate( httpd_server* hs )
 void httpd_unlisten( httpd_server* hs ) {
 	int i;
 
-	for (i=0;i<SIZEOFARRAY(hs->listen_fds);i++)
-		if (hs->listen_fds[i]>=0) {
-			(void) close( hs->listen_fds[i] );
-			hs->listen_fds[i]=-1;
-		}
+	for (i=0;hs->listen_fds[i]>=0;i++) {
+		(void) close( hs->listen_fds[i] );
+		hs->listen_fds[i]=-1;
+	}
 }
 
 
@@ -745,16 +744,18 @@ httpd_send_err( httpd_conn* hc, int status, char* title, char* extraheads, const
 	httpd_write_response( hc );
 	}
 
+/* Only used by httpd_parse_resp() which control data and syslog errors itself.
+ */
 static void httpd_send_err2(int fd, int status, char* title, const char* form)
 	{
-	dprintf(fd,"HTTP/1.1 %d %s\015\012Server: %s\015\012Content-Type: text/html\015\012Accept-Ranges: bytes\015\012Connection: close\015\012\015\012", status, title, EXPOSED_SERVER_SOFTWARE);
-	dprintf(fd,"\
+	httpd_dprintf(fd,"HTTP/1.1 %d %s\015\012Server: %s\015\012Content-Type: text/html\015\012Accept-Ranges: bytes\015\012Connection: close\015\012\015\012", status, title, EXPOSED_SERVER_SOFTWARE);
+	httpd_dprintf(fd,"\
 <HTML>\n\
 <HEAD><TITLE>%d %s</TITLE></HEAD>\n\
 <BODY BGCOLOR=\"#cc9999\" TEXT=\"#000000\" LINK=\"#2020ff\" VLINK=\"#4040cc\">\n\
 <H2>%d %s</H2>\n",status, title, status, title );
-	dprintf(fd,form,"");
-	dprintf(fd, "\
+	httpd_dprintf(fd,form,"");
+	httpd_dprintf(fd, "\
 <HR>\n\
 <ADDRESS><A HREF=\"%s\">%s</A></ADDRESS>\n\
 </BODY>\n\
@@ -2859,9 +2860,10 @@ cgi_interpose_input(interpose_args_t * args)
 	while ( c < hc->contentlength )
 		{
 		r = read( args->rfd, buf, MIN( sizeof(buf), hc->contentlength - c ) );
-		if ( r < 0 && ( errno == EINTR || errno == EAGAIN ) )
+		if ( r < 0 && ( errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK ) )
 			{
-			sleep( 1 );
+			struct timespec tim={0, 300000000}; /* 300 ms */
+			nanosleep(&tim, NULL);
 			continue;
 			}
 		if ( r <= 0 )
@@ -3031,7 +3033,7 @@ void httpd_parse_resp(interpose_args_t * args) {
 	for (;;) {
 		r=getline(&buf,&buflen,fp);
 		if ( r < 0 ) {
-		   	if ( errno == EINTR || errno == EAGAIN ) { /* EAGAIN should no more happen as blocking mode */
+		   	if ( errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK ) { /* EAGAIN should no more happen as blocking mode */
 				struct timespec tim={0, 100000000}; /* 100 ms */
 				nanosleep(&tim, NULL);
 				continue;
@@ -3219,7 +3221,7 @@ void httpd_parse_resp(interpose_args_t * args) {
 			for (;;) {
 				r = fread(buf,sizeof(char), buflen-1,fp );
 				if ( r <= 0 ) {
-					if ( errno == EINTR || errno == EAGAIN ) { /* should not happen (in blocking mode) */
+					if ( errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK ) { /* should not happen (in blocking mode) */
 						struct timespec tim={0, 100000000}; /* 100 ms */
 						nanosleep(&tim, NULL);
 						continue;
@@ -3320,7 +3322,7 @@ void httpd_parse_resp(interpose_args_t * args) {
 		for (;;) {
 			r = fread(buf,sizeof(char), buflen-1,fp );
 			if ( r <= 0 ) {
-				if ( errno == EINTR || errno == EAGAIN ) { /* should not happen (in blocking mode) */
+				if ( errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK ) { /* should not happen (in blocking mode) */
 					struct timespec tim={0, 100000000}; /* 100 ms */
 					nanosleep(&tim, NULL);
 					continue;
@@ -3999,10 +4001,9 @@ static inline size_t sockaddr_len( const struct sockaddr * sa ) {
 	}
 }
 
-#ifndef HAVE_DPRINTF
-/* Some systems don't have dprintf(), so we make our own...
+/* like dprintf, but manage EAGAIN or EINTR.
 */
-int dprintf( int fd, const char* format, ... ) {
+int httpd_dprintf( int fd, const char* format, ... ) {
 	va_list ap;
 	int r;
 	char * buf=malloc(MAXPATHLEN);
@@ -4027,14 +4028,13 @@ int dprintf( int fd, const char* format, ... ) {
 	}
 
 	if (r>0) {
-		r=write(fd,buf,r);
+		r=httpd_write_fully(fd,buf,r);
 		free(buf);
 		return r;
 	}
 	free(buf);
 	return r;
 }
-#endif
 
 /*! httpd_read_fully read the requested buffer completely, accounting for interruptions.
  * \return the effective number of bytes read.
@@ -4052,9 +4052,10 @@ httpd_read_fully( int fd, void* buf, size_t nbytes )
 		ssize_t r;
 
 		r = read( fd, (char*) buf + nread, nbytes - nread );
-		if ( r < 0 && ( errno == EINTR || errno == EAGAIN ) )
+		if ( r < 0 && ( errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK ) ) /* should only happen when O_NONBLOCK is set */
 			{
-			sleep( 1 );
+			struct timespec tim={0, 300000000}; /* 300 ms */
+			nanosleep(&tim, NULL);
 			continue;
 			}
 		if ( r < 0 ) 
@@ -4081,8 +4082,9 @@ ssize_t httpd_write_fully( int fd, const void* buf, size_t nbytes ) {
 		ssize_t r;
 
 		r = write( fd, (char*) buf + nwritten, nbytes - nwritten );
-		if ( r < 0 && ( errno == EINTR || errno == EAGAIN ) ) {
-			sleep( 1 );
+		if ( r < 0 && ( errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK ) ) { /* should only happen when O_NONBLOCK is set */ 
+			struct timespec tim={0, 50000000}; /* 50 ms */
+			nanosleep(&tim, NULL);
 			continue;
 		}
 		if ( r < 0 ) {

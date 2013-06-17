@@ -88,8 +88,8 @@ dnl Most operating systems have gethostbyname() in the default searched
 dnl libraries (i.e. libc):
 dnl
 V_NETLIBS=""
-AC_CHECK_FUNC(gethostbyname)
-AC_CHECK_FUNC(socket)
+AC_CHECK_FUNC(getaddrinfo)
+AC_CHECK_FUNC(socket bind listen inet_ntop)
 
 AC_CHECK_LIB(inet6, main)
 AC_CHECK_LIB(gpgme-pthread, gpgme_check_version,,AC_MSG_ERROR("libgpgme-pthread.so missing (or incorrect)."))
@@ -100,7 +100,7 @@ AC_CHECK_FUNC(hstrerror, ,
     AC_CHECK_LIB(resolv, hstrerror, V_NETLIBS="-lresolv $V_NETLIBS"))
 
 AC_REPLACE_FUNCS(strerror)
-AC_CHECK_FUNCS(setsid gai_strerror kqueue sigset strcasestr dprintf closefrom)
+AC_CHECK_FUNCS(setsid gai_strerror kqueue sigset strcasestr closefrom)
 AC_FUNC_MMAP
 
 case "$target_os" in

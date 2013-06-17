@@ -64,7 +64,7 @@ typedef struct {
 	char* sig_pattern;
 	int cgi_limit, cgi_count;
 	char* cwd;
-	int listen_fds[4];
+	int listen_fds[5];
 	int bfield;
 	FILE* logfp;
 	} httpd_server;
@@ -324,9 +324,7 @@ extern ssize_t httpd_write_fully( int fd, const void* buf, size_t nbytes );
 /* Generate debugging statistics syslog message. */
 extern void httpd_logstats( long secs );
 
-#ifndef HAVE_DPRINTF
-extern int dprintf( int fd, const char* format, ... );
-#endif /* HAVE_DPRINTF */
+extern int httpd_dprintf( int fd, const char* format, ... );
 
 /* Allocate and generate a random string of size len (from charset [G-Vg-v]) */
 extern char *random_boundary(unsigned short len);

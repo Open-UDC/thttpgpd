@@ -882,7 +882,7 @@ main( int argc, char** argv )
 	httpd_conn_count = 0;
 
 	if ( hs != (httpd_server*) 0 )
-		for ( i=0 ; i<SIZEOFARRAY(hs->listen_fds) && hs->listen_fds[i]>=0 ; i++ )
+		for ( i=0 ; hs->listen_fds[i]>=0 ; i++ )
 				fdwatch_add_fd( hs->listen_fds[i], (void*) 0, FDW_READ );
 
 	/* We will now only use syslog if some errors happen, so close stderr */
@@ -923,8 +923,8 @@ main( int argc, char** argv )
 		/* Is it a new connection? */
 		if ( hs != (httpd_server*) 0 ) {
 			cont=0;
-			for (i=0;i<SIZEOFARRAY(hs->listen_fds) && hs->listen_fds[i]>=0 && fdwatch_check_fd( hs->listen_fds[i] );i++) {
-				if ( handle_newconnect( &tv, hs->listen_fds[i] ) ) {
+			for ( i=0 ; hs->listen_fds[i]>=0 ; i++ ) {
+				if ( fdwatch_check_fd( hs->listen_fds[i] ) && handle_newconnect( &tv, hs->listen_fds[i] ) ) {
 					cont=1;
 					break;
 				/* Go around the loop and do another fdwatch, rather than
@@ -961,7 +961,7 @@ main( int argc, char** argv )
 			terminate = 1;
 			if ( hs != (httpd_server*) 0 )
 				{
-				for ( i=0 ; i<SIZEOFARRAY(hs->listen_fds) && hs->listen_fds[i]>=0 ; i++ )
+				for ( i=0 ; hs->listen_fds[i]>=0 ; i++ )
 						fdwatch_del_fd( hs->listen_fds[i] );
 				httpd_unlisten( hs );
 				}
@@ -1457,7 +1457,7 @@ shut_down( void )
 		{
 		httpd_server* ths = hs;
 		hs = (httpd_server*) 0;
-		for ( i=0 ; i<SIZEOFARRAY(ths->listen_fds) && ths->listen_fds[i]>=0 ; i++ )
+		for ( i=0 ; ths->listen_fds[i]>=0 ; i++ )
 				fdwatch_del_fd( ths->listen_fds[i] );
 		httpd_terminate( ths );
 		}

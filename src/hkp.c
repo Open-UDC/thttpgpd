@@ -99,7 +99,7 @@ void hkp_add( httpd_conn* hc ) {
 		memcpy(buff,&(hc->read_buf[hc->checked_idx]), c);
 	while ( c < hc->contentlength ) {
 		r = read( hc->conn_fd, buff+c, hc->contentlength - c );
-		if ( r < 0 && ( errno == EINTR || errno == EAGAIN ) ) {
+		if ( r < 0 && ( errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK ) ) {
 			struct timespec tim={0, 300000000}; /* 300 ms */
 			nanosleep(&tim, NULL);
 			if (i++>50) { /* 50*300ms = 15 seconds */
@@ -229,12 +229,11 @@ static ssize_t gpgdata4export_cb(struct gpgdata4export_handle * h, void *buffer,
 	if (!export_start) {
 		send_mime(h->hc, 200, ok200title, "", "", "text/html; charset=%s",(off_t) -1, h->hc->sb.st_mtime );
 		httpd_write_response(h->hc);
-		/* dprintf is Posix since 2008 */
-		dprintf(h->hc->conn_fd,"<html><head><title>"SOFTWARE_NAME" Public Key Server -- Get: %.80s (%d+)</title></head><body><h1>Public Key Server -- Get: %.80s (%d+)</h1><pre>\n",h->searchs[0],h->nsearchs-1,h->searchs[0],h->nsearchs-1);
+		httpd_dprintf(h->hc->conn_fd,"<html><head><title>"SOFTWARE_NAME" Public Key Server -- Get: %.80s (%d+)</title></head><body><h1>Public Key Server -- Get: %.80s (%d+)</h1><pre>\n",h->searchs[0],h->nsearchs-1,h->searchs[0],h->nsearchs-1);
 		export_start=1;
 	}
 
-	return write(h->hc->conn_fd,buffer,size);
+	return httpd_write_fully(h->hc->conn_fd,buffer,size);
 }
 /* dummy function for callback based gpgme data objects */
 static void gpg_data_release_cb(void *handle)
@@ -401,7 +400,7 @@ void hkp_lookup( httpd_conn* hc ) {
 			httpd_send_err(hc, 500, err500title, "", err500form, "g11" );
 			HKP_LOOKUP_EXIT(EXIT_FAILURE);
 		} else if (export_start) {
-			write(hc->conn_fd,"\n</pre></body></html>\n",sizeof("\n</pre></body></html>\n")-1);
+			httpd_write_fully(hc->conn_fd,"\n</pre></body></html>\n",sizeof("\n</pre></body></html>\n")-1);
 		} else {
 			httpd_send_err(hc, 404, err404title, "", "Get: %.80s (...): No key found ! :-(", search[0]);
 		}
