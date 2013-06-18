@@ -310,10 +310,10 @@ extern void httpd_realloc_str( char** strP, size_t* maxsizeP, size_t size );
 extern char * get_ip_str(const struct sockaddr * sa);
 
 /* Set NDELAY mode on a socket. */
-extern void httpd_set_ndelay( int fd );
+extern int httpd_set_ndelay( int fd );
 
 /* Clear NDELAY mode on a socket. */
-extern void httpd_clear_ndelay( int fd );
+extern int httpd_clear_ndelay( int fd );
 
 /* Read the requested buffer completely, accounting for interruptions. */
 extern ssize_t httpd_read_fully( int fd, void* buf, size_t nbytes );

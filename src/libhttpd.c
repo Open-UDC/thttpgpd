@@ -329,20 +329,73 @@ static int init_listen_sockets(const char * hostname, unsigned short port, int *
 		return -1;
 	}
 
-	for (i=0, rp = result;i<(nmemb-1) && rp != NULL; rp = rp->ai_next) {
+	for (i=0, rp = result;i<(nmemb-1) && rp ; rp = rp->ai_next) {
 		listen_fds[i] = socket(rp->ai_family, rp->ai_socktype,
 		rp->ai_protocol);
 		if (listen_fds[i] == -1)
 			continue;
 
-		if (bind(listen_fds[i], rp->ai_addr, rp->ai_addrlen) == 0)
-			i++ ; 	/* Success */
-		else {
+		/* Allow reuse of local addresses. */
+		s = 1;
+		if ( setsockopt(listen_fds[i], SOL_SOCKET, SO_REUSEADDR, (char*) &s, sizeof(s) ) < 0 ) {
+			char * str=get_ip_str(rp->ai_addr);
+			syslog( LOG_WARNING, "setsockopt SO_REUSEADDR [%.80s]:%.80s - %m", str, service);
+			free(str);
+		}
+
+		/* Try to restrict PF_INET6 socket to IPv6 communications only. */
+		if (rp->ai_addr->sa_family == AF_INET6) {
+			s=1;
+			if ( setsockopt(listen_fds[i], IPPROTO_IPV6, IPV6_V6ONLY, (char*) &s, sizeof(s) ) < 0 ) {
+				char * str=get_ip_str(rp->ai_addr);
+				syslog( LOG_WARNING, "setsockopt IPV6_V6ONLY [%.80s]:%.80s - %m", str, service);
+				free(str);
+			}
+		}
+
+		/* Set non-blocking mode (CRITICAL) */
+		if ( httpd_set_ndelay( listen_fds[i] ) < 0 ) { 
+			char * str=get_ip_str(rp->ai_addr);
+			syslog( LOG_CRIT, "httpd_set_ndelay [%.80s]:%.80s - %m", str, service );
+			free(str);
+			close( listen_fds[i] );
+			listen_fds[i] = -1;
+			freeaddrinfo(result);
+			return -1;
+		}
+
+		if (bind(listen_fds[i], rp->ai_addr, rp->ai_addrlen)) {
+			/* bind fail */
 			char * str=get_ip_str(rp->ai_addr);
 			syslog(LOG_WARNING, "bind [%.80s]:%.80s - %m", str, service );
 			free(str);
 			close(listen_fds[i]);
 			listen_fds[i] = -1;
+		}
+		else if ( listen( listen_fds[i], LISTEN_BACKLOG ) ) {
+			/* listen fail */
+			char * str=get_ip_str(rp->ai_addr);
+			syslog(LOG_WARNING, "listen [%.80s]:%.80s - %m", str, service );
+			free(str);
+			close(listen_fds[i]);
+			listen_fds[i] = -1;
+		}
+		else {
+			/* Success */
+			i++;
+			/* Use accept filtering, if available. */
+#ifdef SO_ACCEPTFILTER
+#if ( __FreeBSD_version >= 411000 )
+#define ACCEPT_FILTER_NAME "httpready"
+#else
+#define ACCEPT_FILTER_NAME "dataready"
+#endif
+			struct accept_filter_arg af;
+			(void) bzero( &af, sizeof(af) );
+			(void) strcpy( af.af_name, ACCEPT_FILTER_NAME );
+			(void) setsockopt(
+				listen_fds[i], SOL_SOCKET, SO_ACCEPTFILTER, (char*) &af, sizeof(af) );
+#endif /* SO_ACCEPTFILTER */
 		}
 	}
 
@@ -352,54 +405,6 @@ static int init_listen_sockets(const char * hostname, unsigned short port, int *
 		/* No address succeeded */
 		syslog(LOG_CRIT, "init_listen_sockets(%.80s,%d,,%d) : No address succeeded", hostname, port, nmemb );
 		return -1;
-	}
-
-	for (i=0;listen_fds[i]>=0;i++) { 
-		/* Allow reuse of local addresses. */
-		s = 1;
-		if ( setsockopt(
-				 listen_fds[i], SOL_SOCKET, SO_REUSEADDR, (char*) &s,
-				 sizeof(s) ) < 0 )
-			syslog( LOG_CRIT, "setsockopt SO_REUSEADDR - %m" );
-
-		/* Set the listen file descriptor to no-delay / non-blocking mode. */
-		flags = fcntl( listen_fds[i], F_GETFL, 0 );
-		if ( flags == -1 )
-			{
-			syslog( LOG_CRIT, "fcntl F_GETFL - %m" );
-			(void) close( listen_fds[i] );
-			return -1;
-			}
-		if ( fcntl( listen_fds[i], F_SETFL, flags | O_NDELAY ) < 0 )
-			{
-			syslog( LOG_CRIT, "fcntl O_NDELAY - %m" );
-			(void) close( listen_fds[i] );
-			return -1;
-			}
-
-		/* Start a listen going. */
-		if ( listen( listen_fds[i], LISTEN_BACKLOG ) < 0 )
-			{
-			syslog( LOG_CRIT, "listen - %m" );
-			(void) close( listen_fds[i] );
-			return -1;
-			}
-
-		/* Use accept filtering, if available. */
-#ifdef SO_ACCEPTFILTER
-		{
-#if ( __FreeBSD_version >= 411000 )
-#define ACCEPT_FILTER_NAME "httpready"
-#else
-#define ACCEPT_FILTER_NAME "dataready"
-#endif
-		struct accept_filter_arg af;
-		(void) bzero( &af, sizeof(af) );
-		(void) strcpy( af.af_name, ACCEPT_FILTER_NAME );
-		(void) setsockopt(
-			listen_fds[i], SOL_SOCKET, SO_ACCEPTFILTER, (char*) &af, sizeof(af) );
-		}
-#endif /* SO_ACCEPTFILTER */
 	}
 
 	return i;
@@ -514,36 +519,35 @@ void httpd_write_response( httpd_conn* hc ) {
 	}
 }
 
-/* Set non-blocking (previously a.k.a. O_NDELAY) mode on a socket, pipe... */
-void
-httpd_set_ndelay( int fd )
-	{
+/* Set non-blocking (previously a.k.a. O_NDELAY) mode on a socket, pipe...
+ * \return like fcntl, -1 on error (cf errno).
+ */
+int httpd_set_ndelay( int fd ) {
 	int flags, newflags;
 
 	flags = fcntl( fd, F_GETFL, 0 );
-	if ( flags != -1 )
-		{
+	if ( flags != -1 ) {
 		newflags = flags | (int) O_NONBLOCK;
 		if ( newflags != flags )
-			(void) fcntl( fd, F_SETFL, newflags );
-		}
+			flags =  fcntl( fd, F_SETFL, newflags );
 	}
+	return flags;
+}
 
-
-/* Clear O_NONBLOCK / set blocking mode on a socket, pipe... */
-void
-httpd_clear_ndelay( int fd )
-	{
+/* Clear O_NONBLOCK / set blocking mode on a socket, pipe...
+ * \return like fcntl, -1 on error (cf errno).
+ */
+int httpd_clear_ndelay( int fd ) {
 	int flags, newflags;
 
 	flags = fcntl( fd, F_GETFL, 0 );
-	if ( flags != -1 )
-		{
+	if ( flags != -1 ) {
 		newflags = flags & ~ (int) O_NONBLOCK;
 		if ( newflags != flags )
-			(void) fcntl( fd, F_SETFL, newflags );
-		}
+			flags = fcntl( fd, F_SETFL, newflags );
 	}
+	return flags;
+}
 
 
 void
@@ -3966,6 +3970,11 @@ static void make_log_entry(const httpd_conn* hc, time_t now, int status) {
 char *get_ip_str(const struct sockaddr * sa) {
 	char str[MAX(INET6_ADDRSTRLEN,INET_ADDRSTRLEN)+1];
 
+#if 0
+// getnameinfo vs inet_ntop = ?? vs perfomance ?? */
+	if (getnameinfo( sa, sockaddr_len( sa ), str, sizeof(str), 0, 0, NI_NUMERICHOST ))
+		strncpy(str, "fail", sizeof(str));
+#endif
 	switch(sa->sa_family) {
 		case AF_INET:
 			inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr),str, sizeof(str));
