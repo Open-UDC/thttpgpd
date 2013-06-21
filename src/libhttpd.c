@@ -243,12 +243,8 @@ httpd_server* httpd_initialize( char* hostname, unsigned short port,
 
 	if ( fastcgi_pass == (char*) 0 )
 		hs->fastcgi_saddr = (struct sockaddr *) 0;
-	else
-		{
-		hs->fastcgi_saddr = NEW( struct sockaddr, 1 );
-
-		}
-
+	/* else ... */
+		
 	if ( sig_pattern == (char*) 0 )
 		hs->sig_pattern = (char*) 0;
 	else

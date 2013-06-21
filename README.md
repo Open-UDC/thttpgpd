@@ -23,7 +23,7 @@ or at least other studies about Social Credit.
 (tiny/turbo/throttling HTTP server), version 2.25b of 29dec2003.
 
 Check the web page (http://www.openudc.org) for updates, or add
-yourself to the mailing list open-udc@googlegroups.com
+yourself to the mailing list openudc@googlegroups.com
 
 ## Build Status [![Build Status](https://secure.travis-ci.org/Open-UDC/thttpgpd.png?branch=master)](http://travis-ci.org/Open-UDC/thttpgpd)
 
