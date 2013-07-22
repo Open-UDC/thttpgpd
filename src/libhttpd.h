@@ -156,6 +156,7 @@ extern hctab_t hctab;
 #define METHOD_GET (1<<0)
 #define METHOD_HEAD (1<<1)
 #define METHOD_POST (1<<2)
+#define METHOD_ALL (METHOD_GET|METHOD_HEAD|METHOD_POST)
 
 /* States for checked_state. */
 #define CHST_FIRSTWORD 0
