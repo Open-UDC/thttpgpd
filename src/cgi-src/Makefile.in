@@ -25,7 +25,7 @@
 # SUCH DAMAGE.
 
 # CONFIGURE: Directory for CGI executables.
-CGIBINDIR =	$(HOMEDIR)/$(WEBDIR)/cgi-bin
+CGIBINDIR =	$(REFDIR)/$(WEBDIR)/cgi-bin
 
 CC =		@CC@
 CCOPT =		@V_CCOPT@

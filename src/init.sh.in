@@ -3,8 +3,10 @@
 LUDDUSER="@user@"
 SOFTWARE="@software@"
 LUDDVERSION="@software@/@version@"
+prefix="@prefix@" # weirdo requirement for some autotool variables
 LUDDUSER_HOMEDIR="@localstatedir@/@software@"
 KEYSERVER="hkp://pool.sks-keyservers.net"
+refdir="@datarootdir@/@software@"
 
 [ "$SOFTWARE" == ludd ] && OPENUDC=1
 
@@ -92,18 +94,11 @@ else
 	isroot=1
 	dir=$(grep "^"$LUDDUSER":" /etc/passwd | cut -d ":" -f 6)
 	if [[ ! "$dir" ]] ; then
-		useradd -r -c "system user for $SOFTWARE" -d "$LUDDUSER_HOMEDIR" -s /sbin/nologin $LUDDUSER || exit 1
+		useradd -r -m -c "system user for $SOFTWARE" -d "$LUDDUSER_HOMEDIR" -s /sbin/nologin $LUDDUSER || exit 1
 		chown -R $LUDDUSER "$LUDDUSER_HOMEDIR" || exit 1
 		dir=$(grep "^"$LUDDUSER":" /etc/passwd | cut -d ":" -f 6)
 		[[ ! "$dir" ]] && exit 1
 	fi
-fi
-
-refdir=$(grep "^"$LUDDUSER":" /etc/passwd | cut -d ":" -f 6)
-
-if [[ ! "$refdir" ]] ; then
-	echo "${0##*/}: Error: Missing ref dir (HOME of $LUDDUSER system user)"
-	exit 1
 fi
 
 for ((i=0;$#;)) ; do
@@ -116,19 +111,21 @@ for ((i=0;$#;)) ; do
 	shift
 done
 
-mkdir -p  "$dir/gpgme" "$dir/sigcache" "$dir/pub"
-if ((isroot)) ; then
-	chown -R "$LUDDUSER" "$dir/sigcache"
-	((OPENUDC)) && chown -R "$LUDDUSER" "$dir/pub/udc"
-fi
+mkdir -pv  "$dir/gpgme" "$dir/sigcache" "$dir/pub"
 
 if [[ "$dir" != "$refdir" ]] ; then
 	cp -avf "$refdir/pub/pks" "$dir/pub/"
+	cp -av "$refdir/pub/favicon.ico" "$refdir/pub/robots.txt" "$dir/pub/"
 	if ((OPENUDC)) ; then 
 		cp -avf "$refdir/pub/udid2" "$dir/pub/"
 		cp -avf "$refdir/openudc_init.sh" "$dir"
 		cp -avf "$refdir/pub/udc" "$dir/pub/"
 	fi
+fi
+
+if ((isroot)) ; then
+	chown -R "$LUDDUSER" "$dir/sigcache"
+	((OPENUDC)) && chown -R "$LUDDUSER" "$dir/pub/udc"
 fi
 
 mybotkeys=($(gpg --list-secret-keys --with-colons --with-fingerprint "ubot1;" | grep "^fpr" | cut -d: -f 10))
@@ -164,7 +161,7 @@ fi
 
 # Export ubot1 key and owner's key to the keyring.
 echo "Your own (personnal) certificate ?"
-gpg --keyserver "$KEYSERVER" --search-keys "$myudid" 2> /dev/null
+gpg --keyserver "$KEYSERVER" --search-keys "$myudid" #2> /dev/null
 gpg --export "($myudid" | gpg --import --homedir "$dir/gpgme" 2> /dev/null
 gpg --export-secret-keys "${mybotkeys[$bki]}" | gpg --import --homedir "$dir/gpgme" 2> /dev/null
 

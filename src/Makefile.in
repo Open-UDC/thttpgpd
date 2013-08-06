@@ -79,7 +79,7 @@ subdirs:
 	    cd $$i ; \
 	    $(MAKE) $(MFLAGS) \
 		BINDIR=$(BINDIR) MANDIR=$(MANDIR) \
-		HOMEDIR=$(HOMEDIR) WEBDIR=$(WEBDIR) \
+		REFDIR=$(REFDIR) WEBDIR=$(WEBDIR) \
 	) ; done
 
 
@@ -99,7 +99,7 @@ installsubdirs:
 	    cd $$i ; \
 	    $(MAKE) $(MFLAGS) \
 		BINDIR=$(BINDIR) MANDIR=$(MANDIR) \
-		HOMEDIR=$(HOMEDIR) WEBDIR=$(WEBDIR) \
+		REFDIR=$(REFDIR) WEBDIR=$(WEBDIR) \
 		install \
 	) ; done
 
@@ -117,7 +117,7 @@ uninstallsubdirs:
 	    cd $$i ; \
 	    $(MAKE) $(MFLAGS) \
 		BINDIR=$(BINDIR) MANDIR=$(MANDIR) \
-		HOMEDIR=$(HOMEDIR) WEBDIR=$(WEBDIR) \
+		REFDIR=$(REFDIR) WEBDIR=$(WEBDIR) \
 		uninstall \
 	) ; done
 

@@ -453,7 +453,7 @@ main( int argc, char** argv )
 		{
 		pwd = getpwnam( user );
 		if ( pwd == (struct passwd*) 0 )
-			DIE(1,"getpwnam %.80s - %m %s",user,"(forget "SOFTWARE_NAME"_init.sh ?)");
+			DIE(1,"user %.80s not found ! %s",user,"(forget "SOFTWARE_NAME"_init.sh ?)");
 		}
 	else
 		pwd = getpwuid(getuid());

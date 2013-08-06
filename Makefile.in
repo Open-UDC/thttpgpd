@@ -31,7 +31,7 @@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 # Pathname of directory to install the binary.
-BINDIR = @sbindir@
+BINDIR = @bindir@
 # Pathname of directory to install the man page.
 #MANDIR = @mandir@ # Weirdo autotool bugs here ...
 MANDIR = @datarootdir@/man
@@ -39,7 +39,8 @@ MANDIR = @datarootdir@/man
 # name of output software
 SOFTWARE = @software@
 
-HOMEDIR = @localstatedir@/@software@
+# directory to store files to be copied.
+REFDIR = @datarootdir@/@software@
 
 # Pathname of directory available trough internet.
 WEBDIR = pub
@@ -71,7 +72,7 @@ subdirs:
 	    cd $$i ; \
 	    $(MAKE) $(MFLAGS) \
 		BINDIR=$(BINDIR) MANDIR=$(MANDIR) \
-		HOMEDIR=$(HOMEDIR) WEBDIR=$(WEBDIR) \
+		REFDIR=$(REFDIR) WEBDIR=$(WEBDIR) \
 	) ; done
 
 test:
@@ -84,20 +85,20 @@ installsubdirs:
 	    cd $$i ; \
 	    $(MAKE) $(MFLAGS) \
 		BINDIR=$(BINDIR) MANDIR=$(MANDIR) \
-		HOMEDIR=$(HOMEDIR) WEBDIR=$(WEBDIR) \
+		REFDIR=$(REFDIR) WEBDIR=$(WEBDIR) \
 		install \
 	) ; done
 
 uninstall:	uninstallsubdirs
-	-userdel $(LUDDUSER)
-	rm -rf "$(HOMEDIR)"
+	-userdel -r $(LUDDUSER)
+	rm -rf "$(REFDIR)"
 
 uninstallsubdirs:
 	for i in $(SUBDIRS) ; do ( \
 	    cd $$i ; \
 	    $(MAKE) $(MFLAGS) \
 		BINDIR=$(BINDIR) MANDIR=$(MANDIR) \
-		HOMEDIR=$(HOMEDIR) WEBDIR=$(WEBDIR) \
+		REFDIR=$(REFDIR) WEBDIR=$(WEBDIR) \
 		uninstall \
 	) ; done
 
