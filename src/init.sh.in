@@ -3,6 +3,7 @@
 LUDDUSER="@user@"
 SOFTWARE="@software@"
 LUDDVERSION="@software@/@version@"
+LUDDUSER_HOMEDIR="@localstatedir@/@software@"
 KEYSERVER="hkp://pool.sks-keyservers.net"
 
 [ "$SOFTWARE" == ludd ] && OPENUDC=1
@@ -85,18 +86,24 @@ EOF
 return $?
 }
 
+if (($(id -u))) ; then
+	dir="$HOME/.$SOFTWARE"
+else
+	isroot=1
+	dir=$(grep "^"$LUDDUSER":" /etc/passwd | cut -d ":" -f 6)
+	if [[ ! "$dir" ]] ; then
+		useradd -r -c "system user for $SOFTWARE" -d "$LUDDUSER_HOMEDIR" -s /sbin/nologin $LUDDUSER || exit 1
+		chown -R $LUDDUSER "$LUDDUSER_HOMEDIR" || exit 1
+		dir=$(grep "^"$LUDDUSER":" /etc/passwd | cut -d ":" -f 6)
+		[[ ! "$dir" ]] && exit 1
+	fi
+fi
+
 refdir=$(grep "^"$LUDDUSER":" /etc/passwd | cut -d ":" -f 6)
 
 if [[ ! "$refdir" ]] ; then
 	echo "${0##*/}: Error: Missing ref dir (HOME of $LUDDUSER system user)"
 	exit 1
-fi
-
-if (($(id -u))) ; then
-	dir="$HOME/.$SOFTWARE"
-else
-	isroot=1
-	dir="$refdir"
 fi
 
 for ((i=0;$#;)) ; do

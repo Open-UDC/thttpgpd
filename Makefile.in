@@ -78,8 +78,6 @@ test:
 	./src/$(SOFTWARE) --help || ./src/$(SOFTWARE) --version
 
 install:	installsubdirs
-	-useradd -r -c "system user for $(SOFTWARE)" -d "$(HOMEDIR)" -s /sbin/nologin $(LUDDUSER)
-	chown -R $(LUDDUSER) "$(HOMEDIR)"
 
 installsubdirs:
 	for i in $(SUBDIRS) ; do ( \
