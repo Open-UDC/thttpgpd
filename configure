@@ -683,6 +683,7 @@ enable_auth_basic
 enable_forbid_hidden
 enable_check_udid2
 enable_OpenUDC
+with_default_user
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1320,6 +1321,13 @@ Optional Features:
   --enable-OpenUDC	Enable OpenUDC support. It also enable forbid_hidden and check_udid2,
 	 		set default port to 11371, and name the output software "ludd".
 			If disabled the output software will be named "thttpgpd".
+
+Optional Packages:
+  --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
+  --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
+
+  --with-default-user=name	Customize default user to switch to when started as root,
+			by default it is _thttpgpd, or _ludd if OpenUDC support is enabled.
 
 Some influential environment variables:
   CC          C compiler command
@@ -4773,13 +4781,25 @@ if test "${enable_OpenUDC+set}" = set; then :
 		extrasubdirs="${extrasubdirs} udc"
 		output="${output} src/udc/Makefile"
 		software="ludd"
-		user="_ludd"
+		if test -z "${user}" ; then
+			user="_ludd"
+		fi
 		port=11371
 
 else
    	software="thttpgpd"
-		user="_thttpgpd"
+		if test -z "${user}" ; then
+			user="_thttpgpd"
+		fi
 		port=80
+
+fi
+
+
+
+# Check whether --with-default-user was given.
+if test "${with_default_user+set}" = set; then :
+  withval=$with_default_user; 	user="${withval}"
 
 fi
 

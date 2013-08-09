@@ -159,13 +159,24 @@ AC_ARG_ENABLE(OpenUDC,
 		extrasubdirs="${extrasubdirs} udc"
 		output="${output} src/udc/Makefile"
 		software="ludd"
-		user="_ludd"
+		if test -z "${user}" ; then
+			user="_ludd"
+		fi
 		port=11371
 	] ,
 	[ 	software="thttpgpd"
-		user="_thttpgpd"
+		if test -z "${user}" ; then
+			user="_thttpgpd"
+		fi
 		port=80
 	] )
+
+AC_ARG_WITH(default-user,
+[
+  --with-default-user=name	Customize default user to switch to when started as root,
+			by default it is _thttpgpd, or _ludd if OpenUDC support is enabled.],
+	[	user="${withval}"
+	])
 
 if [[ "$checkudid2" ]] ; then 
 	extrasubdirs="${extrasubdirs} udid2"
