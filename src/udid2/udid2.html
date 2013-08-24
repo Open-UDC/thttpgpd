@@ -1,6 +1,6 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
 <!--
-    Copyright (c) 2012 Michele Bini <michele.bini@gmail.com>
+    Copyright (c) 2012, 2013 Michele Bini <michele.bini@gmail.com>
     Copyright (c) Chris Veness 2002-2010
   
  This program is free software; you can redistribute it and/or modify
@@ -289,6 +289,14 @@ function resetform() {
    }
 }
 
+// Convert number to fixed point with at least 2 decimal places
+// Keep any extra precision, useful to verify the location with a map
+function fixCoord(x) {
+  return parseFloat(x)
+    .toFixed(8)
+    .match(/^[+-]?[0-9]*[.][0-9][0-9]([0-9]*[1-9])?/)[0];
+}
+
 function normalizeSign(n) {
     if (!(/^[+-]/.test(n))) {
 	n = "+" + n;
@@ -379,7 +387,7 @@ function setgeonameslist(l) {
 	var t = l[i];
 	var o = document.createElement("option");
 	o.text = fullgeoname(t);
-	o.value = t.geonameId + " " + t.lat + " " + t.lng;
+	o.value = t.geonameId + " " + fixCoord(t.lat) + " " + fixCoord(t.lng);
 	if (first == null) first = o.value;
 	addoption(sel, o);
     }
@@ -666,7 +674,7 @@ function generateudid2() {
 	    } else if (!(/^[+-][0-9][0-9][0-9][.][0-9][0-9]$/.test(lon))) {
 		setMessageAfterElement("location", "Could not parse longitude: " + lon);
 	    } else {
-		documentElement("verifylocation").href = "http://www.openstreetmap.org/?lat=" + lat + "&lon=" + lon + "&zoom=15&layers=M";
+		documentElement("verifylocation").href = "http://www.openstreetmap.org/#map=15/" + lat + "/" + lon;
 		setTextContent(documentElement("verifylocation"), "Verify with openstreetmap");
 		setMessageAfterElement("location");
 		ll = lat + "" + lon;
@@ -737,8 +745,8 @@ function generateudid2() {
 			} else if (g.length == 1) {
 			    setMessageAfterElement("place", "Location found");
 			    var t = g[0];
-			    var lat = t.lat;
-			    var lon = t.lng;
+			    var lat = fixCoord(t.lat);
+			    var lon = fixCoord(t.lng);
 			    documentElement("place").value = fullgeoname(t);
 			    documentElement("lat").value = lat;
 			    documentElement("lon").value = lon;
