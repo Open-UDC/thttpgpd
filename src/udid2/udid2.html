@@ -674,7 +674,7 @@ function generateudid2() {
 	    } else if (!(/^[+-][0-9][0-9][0-9][.][0-9][0-9]$/.test(lon))) {
 		setMessageAfterElement("location", "Could not parse longitude: " + lon);
 	    } else {
-		documentElement("verifylocation").href = "http://www.openstreetmap.org/?lat=" + lat + "&lon=" + lon + "&zoom=15&layers=M";
+		documentElement("verifylocation").href = "http://www.openstreetmap.org/#map=15/" + lat + "/" + lon;
 		setTextContent(documentElement("verifylocation"), "Verify with openstreetmap");
 		setMessageAfterElement("location");
 		ll = lat + "" + lon;
