@@ -272,8 +272,9 @@ port=$myport
 # See $SOFTWARE(8) for details.
 #throttles=/etc/thttpd/throttle.conf
 
-# Specifies a file for logging. If no logfile option is specified, $SOFTWARE logs
-# via syslog(). If logfile=/dev/null is specified, $SOFTWARE doesn't log at all.
+# Specifies a file for logging HTTP requests. If no logfile option is specified,
+# $SOFTWARE logs via syslog(). If logfile=/dev/null is specified, $SOFTWARE doesn't
+# log HTTP requests at all.
 #logfile=/var/log/$SOFTWARE.log
 
 # Specifies a file to write the process-id to. If no file is specified, no

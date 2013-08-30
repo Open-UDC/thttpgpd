@@ -2496,6 +2496,7 @@ static void ls(httpd_conn* hc) {
 	** to worry about double closes or file descriptor leaks cause
 	** we're in a subprocess.
 	*/
+	httpd_clear_ndelay( hc->conn_fd );
 	fp = fdopen( hc->conn_fd, "w" );
 	if ( fp == (FILE*) 0 )
 		{
