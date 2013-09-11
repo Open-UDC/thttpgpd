@@ -271,8 +271,7 @@ httpd_server* httpd_initialize( char* hostname, unsigned short port,
 		return (httpd_server*) 0;
 		}
 	hs->bfield = bfield;
-	hs->logfp = (FILE*) 0;
-	httpd_set_logfp( hs, logfp );
+	hs->logfp = logfp;
 
 	/* Initialize listen sockets. */
 	if ( init_listen_sockets(hostname, port, hs->listen_fds, SIZEOFARRAY(hs->listen_fds))  < 1 ) {
@@ -405,14 +404,6 @@ static int init_listen_sockets(const char * hostname, unsigned short port, int *
 
 	return i;
 }
-
-void
-httpd_set_logfp( httpd_server* hs, FILE* logfp )
-	{
-	if ( hs->logfp != (FILE*) 0 )
-		(void) fclose( hs->logfp );
-	hs->logfp = logfp;
-	}
 
 void
 httpd_terminate( httpd_server* hs )

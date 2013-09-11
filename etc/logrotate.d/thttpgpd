@@ -1,0 +1,12 @@
+/var/log/thttpgpd.log {
+	daily
+	missingok
+	rotate 52
+	compress
+	delaycompress
+	notifempty
+	create 640 _thttgpgd adm
+	postrotate
+		killall -HUP thttpgpd
+	endscript
+}

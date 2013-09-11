@@ -185,9 +185,6 @@ extern httpd_server* httpd_initialize( char* hostname,
 	unsigned short port, char* cgi_pattern, char * fastcgi_pass,
 	char* sig_pattern, int cgi_limit, char* cwd, int bfield, FILE* logfp);
 
-/* Change the log file. */
-extern void httpd_set_logfp( httpd_server* hs, FILE* logfp );
-
 /* Call to shut down. */
 extern void httpd_terminate( httpd_server* hs );
 

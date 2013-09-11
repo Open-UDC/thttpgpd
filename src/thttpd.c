@@ -396,15 +396,15 @@ re_open_logfile( void )
 	/* Re-open the log file. */
 	if ( logfile != (char*) 0 && strcmp( logfile, "-" ) != 0 )
 		{
-		syslog( LOG_NOTICE, "re-opening logfile" );
-		logfp = fopen( logfile, "a" );
+		syslog( LOG_NOTICE, "re-opening logfile (%.80s)", logfile );
+		logfp = freopen( logfile, "a", hs->logfp );
 		if ( logfp == (FILE*) 0 )
 			{
-			syslog( LOG_CRIT, "re-opening %.80s - %m", logfile );
+			syslog( LOG_CRIT, "freopen %.80s - %m", logfile );
 			return;
 			}
-		(void) fcntl( fileno( logfp ), F_SETFD, 1 );
-		httpd_set_logfp( hs, logfp );
+		(void) fcntl( fileno( logfp ), F_SETFD, FD_CLOEXEC );
+		hs->logfp = logfp;
 		}
 	}
 
@@ -497,7 +497,7 @@ main( int argc, char** argv )
 				syslog( LOG_WARNING, "logfile is not an absolute path, you may not be able to re-open it" );
 				warnx("logfile is not an absolute path, you may not be able to re-open it");
 				}
-			(void) fcntl( fileno( logfp ), F_SETFD, 1 );
+			(void) fcntl( fileno( logfp ), F_SETFD, FD_CLOEXEC );
 			if ( getuid() == 0 )
 				{
 				/* If we are root then we chown the log file to the user we'll

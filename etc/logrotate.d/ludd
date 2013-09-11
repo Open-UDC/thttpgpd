@@ -1,0 +1,12 @@
+/var/log/ludd.log {
+	daily
+	missingok
+	rotate 52
+	compress
+	delaycompress
+	notifempty
+	create 644 _ludd adm
+	postrotate
+		killall -HUP ludd
+	endscript
+}
