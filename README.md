@@ -29,7 +29,7 @@ yourself to the mailing list openudc@googlegroups.com
 
 ## License
 
-Copyright (c) 2010 The open-udc.org team.
+Copyright (c) 2010 The openudc.org team.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
