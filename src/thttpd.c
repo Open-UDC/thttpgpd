@@ -388,6 +388,7 @@ handle_bus( int sig )
 static void
 re_open_logfile( void )
 	{
+	int logfd, logfd2;
 	FILE* logfp;
 
 	if ( (hsbfield & HS_NO_LOG ) || hs == (httpd_server*) 0 )
@@ -397,13 +398,33 @@ re_open_logfile( void )
 	if ( logfile != (char*) 0 && strcmp( logfile, "-" ) != 0 )
 		{
 		syslog( LOG_NOTICE, "re-opening logfile (%.80s)", logfile );
-		logfp = freopen( logfile, "a", hs->logfp );
-		if ( logfp == (FILE*) 0 )
+		logfd = open( logfile, O_WRONLY|O_CREAT, 0640);
+		if ( logfd < 0 )
 			{
-			syslog( LOG_CRIT, "freopen %.80s - %m", logfile );
+			syslog( LOG_CRIT, "open %.80s - %m", logfile );
 			return;
 			}
-		(void) fcntl( fileno( logfp ), F_SETFD, FD_CLOEXEC );
+		else if ( logfd <= STDERR_FILENO )
+			{
+			logfd2=logfd;
+		 	logfd=fcntl( logfd2, F_DUPFD, STDERR_FILENO+1 );
+			close(logfd2);
+			if ( logfd < 0 )
+				{
+				syslog( LOG_CRIT, "fcntl %.80s - %m", logfile );
+				return;
+				}
+			}
+		
+		//logfp = freopen( logfile, "a", hs->logfp ); // Strange: this keep the fd with glibc-2.14.1-10.mga2 (32 bits) but doesn't with glibc-2.13-38 (debian, amd64) ...
+		logfp = fdopen( logfd, "a");
+		if ( logfp == (FILE*) 0 )
+			{
+			syslog( LOG_CRIT, "fdopen %.80s - %m", logfile );
+			return;
+			}
+		(void) fcntl( logfd, F_SETFD, FD_CLOEXEC );
+		fclose(hs->logfp);
 		hs->logfp = logfp;
 		}
 	}
