@@ -275,13 +275,22 @@ disk space if you serve a bunch of little files.
 It use the same, simple shell-style pattern, that cgipat (see above).
 Relevant config.h options are SIG_EXCLUDE_PATTERN and SIG_CACHEDIR.
 .PP
-If you want to disable completely signed response comment out the SIG_EXCLUDE_PATTERN in
+If you want to disable completely signed response, comment out the SIG_EXCLUDE_PATTERN in
 config.h and recompile, or specify "/**" with -s flag or "sigpat=...".
 .PP
 .IR Note:
 Unlike CGI checking which follow first symlink destination (see below),
 signature exclusion pattern is check on the asked filename in the URL, thus permit
 to restrict also signing done by embedded actions (like "pks/lookup").
+.SH "BASIC AUTHENTICATION"
+.PP
+Basic Authentication is available as an option at compile time.
+If enabled, it uses a password file in the directory to be protected,
+called .htpasswd by default.
+This file is formatted as the familiar colon-separated
+username/encrypted-password pair, records delimited by newlines.
+The protection does not carry over to subdirectories.
+If you can, you'd better use OpenPGP Authentication, as decribed in the draft "HTTP_OpenPGP_Authentication".
 .SH "THROTTLING"
 .PP
 The throttle file lets you set maximum byte rates on URLs or URL groups.
