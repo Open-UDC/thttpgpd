@@ -1051,6 +1051,10 @@ parse_args( int argc, char** argv )
 			{
 			hsbfield &= ~HS_PKS_ADD_MERGE_ONLY;
 			}
+		else if ( strcmp( argv[argn], "-vh" ) == 0 )
+			{
+			hsbfield |= HS_VIRTUAL_HOST;
+			}
 		else if ( strcmp( argv[argn], "-u" ) == 0 && argn + 1 < argc )
 			{
 			++argn;
@@ -1131,7 +1135,8 @@ usage( void )
 			    "	-d DIR      running directory - default: %s's home or $HOME/."SOFTWARE_NAME"/\n"
 			    "	-C FILE     config file to use - default: "DEFAULT_CFILE" in running directory\n"
 			    "	-p PORT     listenning port - default: %d\n"
-			    "	-H HOST     host or hostname to bind to - default: all available\n"
+			    "	-H HOST     host name or address to bind to - default: all available\n"
+			    "	-vh         enable virtual hosting\n"
 			    "	-r|-nor     enable/disable chroot - default: disable to make all cgi works\n"
 #if DEFAULT_CONNLIMIT > 0
 			    "	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: %d\n"
@@ -1243,6 +1248,11 @@ static int read_config( char* filename )
 				{
 				no_value_required( name, value );
 				hsbfield &= ~HS_PKS_ADD_MERGE_ONLY;
+				}
+			else if ( strcasecmp( name, "vhost" ) == 0 )
+				{
+				no_value_required( name, value );
+				hsbfield |= HS_VIRTUAL_HOST;
 				}
 #ifdef CGI_PATTERN
 			else if ( strcasecmp( name, "cgipat" ) == 0 )

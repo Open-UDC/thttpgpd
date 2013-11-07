@@ -13,8 +13,9 @@ thttpgpd is a tiny/turbo/throttling HTTP server with OpenPGP features.
 .IR configfile ]
 .RB [ -p
 .IR port ]
-.RB [ -e
-.IR port ]
+.RB [ -H
+.IR host ]
+.RB [ -vh ]
 .RB [ -r | -nor ]
 .RB [ -L
 .IR connlimit ]
@@ -26,8 +27,8 @@ thttpgpd is a tiny/turbo/throttling HTTP server with OpenPGP features.
 .IR fastcgipass ]
 .RB [ -t
 .IR throttles ]
-.RB [ -H
-.IR host ]
+.RB [ -e
+.IR port ]
 .RB [ -E
 .IR host ]
 .RB [ -l
@@ -76,10 +77,14 @@ The default is @port@.
 The config-file option name for this flag is "port",
 and the config.h option is DEFAULT_PORT.
 .TP
-.B -e
-Specifies the external port to be reach by other peers.
-The default is to try listenning port.
-The config-file option name for this flag is "eport".
+.B -H
+Specifies a host name or address (and so interface) to bind to.
+The default is to bind to all hostnames supported on the local machine.
+The config-file option name for this flag is "host".
+.TP
+.B -vh
+Enable a basic virtual hosting (see below).
+The config-file option name for this flag is "vhost".
 .TP
 .B -r
 Do a chroot() at initialization time, restricting file access
@@ -126,13 +131,15 @@ Specifies a file of throttle settings.
 See below for details.
 The config-file option name for this flag is "throttles".
 .TP
-.B -H
-Specifies a host name or address (and so interface) to bind to.
-The default is to bind to all hostnames supported on the local machine.
-The config-file option name for this flag is "host".
+.B -e
+Specifies the external port to be reach by other peers.
+May be usefull if you are behind a (configured) NAT router.
+The default is to try listenning port.
+The config-file option name for this flag is "eport".
 .TP
 .B -E
 Specifies the external host name or adress to be reach by other peers.
+May be usefull if you are behind a (configured) NAT router.
 The default to try first hostname (/etc/hostname).
 The config-file option name for this flag is "ehost".
 .TP
@@ -185,6 +192,40 @@ and @software@ will pick up the changes with a restart.
 The syntax of the config file is simple, a series of "option" or
 "option=value" separated by whitespace.
 The option names are listed above with their corresponding command-line flags.
+.SH "VIRTUAL HOSTING"
+.PP
+Virtual hosting (a.k.a. multihoming) means using one machine to serve multiple hostnames.
+For instance, if you're an internet provider and you want to let
+all of your customers have customized web addresses, you might
+have www.joe.acme.com, www.jane.acme.com, and your own www.acme.com,
+all running on the same physical hardware.
+There are two steps to setting this up.
+.PP
+One, make DNS entries for all of the hostnames.
+The current way to do this, allowed by HTTP/1.1, is to use CNAME aliases,
+like so:
+.nf
+  www.acme.com IN A 192.100.66.1
+  www.joe.acme.com IN CNAME www.acme.com
+  www.jane.acme.com IN CNAME www.acme.com
+.fi
+.PP
+Then, you must tell thttpd to handle the multiple hosts (the -vh flag).
+What it does is send each incoming request to a subdirectory based on the
+hostname it's intended for.
+All you have to do in order to set things up is to create those subdirectories
+in the directory where thttpd will run.
+With the example above, you'd do like so:
+.nf
+  mkdir www.acme.com www.joe.acme.com www.jane.acme.com
+.fi
+If you have also dns entries without "www" which should serve the same content,
+u may also create symlinks, like so:
+.nf
+  ln -s www.acme.com acme.com
+  ln -s www.joe.acme.com joe.acme.com
+  ln -s www.jane.acme.com jane.acme.com
+.fi
 .SH "CHROOT"
 .PP
 chroot() is a system call that restricts the program's view
@@ -229,7 +270,7 @@ Relevant config.h option: ALWAYS_CHROOT.
 .PP
 @software@ supports the CGI 1.1 spec.
 .PP
-In order for a CGI program to be run, its name must match the pattern
+In order for a CGI program to be run, its path must match the pattern
 specified either at compile time or on the command line with the -c flag, or
 using "cgipat=..." in the configuration file.
 This is a simple shell-style filename pattern.

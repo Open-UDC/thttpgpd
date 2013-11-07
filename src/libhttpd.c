@@ -300,7 +300,7 @@ httpd_server* httpd_initialize( char* hostname, unsigned short port,
 static int init_listen_sockets(const char * hostname, unsigned short port, int * listen_fds,  size_t nmemb) {
 	struct addrinfo hints;
 	struct addrinfo *result, *rp;
-	int s, flags, i;
+	int s, i;
 	char service[10];
 
 	if (snprintf(service, sizeof(service), "%d", port)>=sizeof(service))
@@ -1651,7 +1651,7 @@ httpd_parse_request( httpd_conn* hc )
 			return -1;
 			}
 		*url = '\0';
-		if ( strchr( reqhost, '/' ) != (char*) 0 || reqhost[0] == '.' )
+		if ( /*strchr( reqhost, '/' ) != (char*) 0 || *(useless)*/ reqhost[0] == '.' )
 			{
 			httpd_send_err( hc, 400, httpd_err400title, "", httpd_err400form, "" );
 			return -1;
@@ -1737,9 +1737,6 @@ httpd_parse_request( httpd_conn* hc )
 				cp = &buf[5];
 				cp += strspn( cp, " \t" );
 				hc->hdrhost = cp;
-				cp = strchr( hc->hdrhost, ':' );
-				if ( cp != (char*) 0 )
-					*cp = '\0';
 				if ( strchr( hc->hdrhost, '/' ) != (char*) 0 || hc->hdrhost[0] == '.' )
 					{
 					httpd_send_err( hc, 400, httpd_err400title, "", httpd_err400form, "" );
@@ -1953,13 +1950,57 @@ httpd_parse_request( httpd_conn* hc )
 	/*if ( hc->expnfilename[0] == '~' )
 		{}*/
 
-	/* Virtual host mapping. */
-	/*if ( hc->hs->vhost )
-		if ( ! vhost_map( hc ) )
-			{
-			httpd_send_err( hc, 500, err500title, "", err500form, hc->encodedurl );
-			return -1;
-			}*/
+	/* Virtual host mapping ("el cheapo"). */
+	/* We differ a little bit from specification (http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.2):
+	 * if the given host has no specific subdirectory, we ignore it and serve ressource
+	 * from the main directory ( while RFC 2616 tells to return a HTTP error 400)
+	 */
+	if ( hc->hs->bfield & HS_VIRTUAL_HOST ) {
+		char * hostdir;
+		struct stat sb;
+		static char * tempfilename;
+		static size_t maxtempfilename = 0;
+		int len, lenh;
+
+		hostdir= hc->reqhost[0] != '\0' ? hc->reqhost : hc->hdrhost ;
+
+		if ( hostdir[0] != '\0' ) {
+			/* Remove port number if given (Note: we assume that given host isn't an IPv6 address) */
+			cp = strchr( hostdir, ':' );
+			if ( cp != (char*) 0 )
+				*cp = '\0';
+
+			if ( stat( hostdir, &sb ) == 0 ) {
+				lenh=strlen(hostdir);
+
+				/* copy hostdir to hc->hostdir (used by make_log_entry) */
+				httpd_realloc_str( &hc->hostdir, &hc->maxhostdir, lenh );
+				strcpy( hc->hostdir, hostdir );
+				/* If http log analysers dislike missing '/' in the begining of an url,
+				 * use following code instead.
+				httpd_realloc_str( &hc->hostdir, &hc->maxhostdir, lenh + 1 );
+				hc->hostdir[0]='/';
+				strcpy( &hc->hostdir[1], hostdir ); */
+
+				/* Prepend hostdir to the filename. */
+				len=strlen(hc->expnfilename);
+				httpd_realloc_str( &tempfilename, &maxtempfilename, len );
+				(void) strcpy( tempfilename, hc->expnfilename );
+				syslog( LOG_ERR, "tempfilename %.80s", tempfilename );
+
+				httpd_realloc_str( &hc->expnfilename, &hc->maxexpnfilename, lenh + 1 + len );
+				(void) strcpy( hc->expnfilename, hostdir );
+				hc->expnfilename[lenh]='/';
+				(void) strcpy( &hc->expnfilename[lenh+1], tempfilename );
+
+			} else if ( errno != ENOENT )
+				syslog( LOG_ERR, "vhost stat %.80s - %m", hostdir );
+
+			/* Re-display port number if given */
+			if ( cp != (char*) 0 )
+				*cp = ':';
+		}
+	}
 
 	/* Expand all symbolic links in the filename.  This also gives us
 	** any trailing non-existing components, for pathinfo.
@@ -3943,18 +3984,18 @@ static void make_log_entry(const httpd_conn* hc, time_t now, int status) {
 			"%s %c%04d", date_nozone, sign, zone );
 		/* And write the log entry. */
 		(void) fprintf( hc->hs->logfp,
-			"%.80s - %.80s [%s] \"%.80s %.300s %.80s\" %d %s \"%.200s\" \"%.200s\"\n",
-			hc->client_addr, ru, date,
-			httpd_method_str( hc->method ), url, hc->protocol,
+			"%.80s - %.80s [%s] \"%.80s %.80s%.300s %.80s\" %d %s \"%.200s\" \"%.200s\"\n",
+			hc->client_addr, ru, date, httpd_method_str( hc->method ),
+			hc->hostdir, url, hc->protocol,
 			status, bytes, hc->referer, hc->useragent );
 #ifdef FLUSH_LOG_EVERY_TIME
 		(void) fflush( hc->hs->logfp );
 #endif
 	} else
 		syslog( LOG_INFO,
-			"%.80s - %.80s \"%.80s %.200s %.80s\" %d %s \"%.200s\" \"%.200s\"",
-			hc->client_addr, ru,
-			httpd_method_str( hc->method ), url, hc->protocol,
+			"%.80s - %.80s \"%.80s %.80s%.200s %.80s\" %d %s \"%.200s\" \"%.200s\"",
+			hc->client_addr, ru, httpd_method_str( hc->method ),
+			hc->hostdir, url, hc->protocol,
 			status, bytes, hc->referer, hc->useragent );
 
 }

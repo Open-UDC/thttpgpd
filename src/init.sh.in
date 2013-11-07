@@ -232,6 +232,11 @@ port=$myport
 # for details.
 #host=
 
+# Enable virtual hosting (a.k.a. multihoming) to serve multiple hostnames.
+# You have to create subdirectories for each secondary hostnames to serve,
+# see $SOFTWARE(8) manpage for details.
+#vhost
+
 # Enable new keys to be added through pks/add. Unless you want to store unused or
 # unknow  keys  in  your keyring, you shouldn't use this.
 #newkeys
