@@ -1986,7 +1986,6 @@ httpd_parse_request( httpd_conn* hc )
 				len=strlen(hc->expnfilename);
 				httpd_realloc_str( &tempfilename, &maxtempfilename, len );
 				(void) strcpy( tempfilename, hc->expnfilename );
-				syslog( LOG_ERR, "tempfilename %.80s", tempfilename );
 
 				httpd_realloc_str( &hc->expnfilename, &hc->maxexpnfilename, lenh + 1 + len );
 				(void) strcpy( hc->expnfilename, hostdir );
