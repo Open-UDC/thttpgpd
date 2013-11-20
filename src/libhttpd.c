@@ -1950,6 +1950,7 @@ httpd_parse_request( httpd_conn* hc )
 	/*if ( hc->expnfilename[0] == '~' )
 		{}*/
 
+#ifdef VHOSTING
 	/* Virtual host mapping ("el cheapo"). */
 	/* We differ a little bit from specification (http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.2):
 	 * if the given host has no specific subdirectory, we ignore it and serve ressource
@@ -2000,6 +2001,7 @@ httpd_parse_request( httpd_conn* hc )
 				*cp = ':';
 		}
 	}
+#endif /* VHOSTING */
 
 	/* Expand all symbolic links in the filename.  This also gives us
 	** any trailing non-existing components, for pathinfo.

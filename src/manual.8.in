@@ -210,7 +210,7 @@ like so:
   www.jane.acme.com IN CNAME www.acme.com
 .fi
 .PP
-Then, you must tell thttpd to handle the multiple hosts (the -vh flag).
+Then, you must tell thttpgpd to handle the multiple hosts (the -vh flag).
 What it does is send each incoming request to a subdirectory based on the
 hostname it's intended for.
 All you have to do in order to set things up is to create those subdirectories
@@ -219,7 +219,7 @@ With the example above, you'd do like so:
 .nf
   mkdir www.acme.com www.joe.acme.com www.jane.acme.com
 .fi
-If you have also dns entries without "www" which should serve the same content,
+If you have also DNS entries without "www" which should serve the same content,
 u may also create symlinks, like so:
 .nf
   ln -s www.acme.com acme.com

@@ -498,6 +498,14 @@ main( int argc, char** argv )
 		/* if read_config does something: re-parse args which override it */
 		parse_args( argc, argv );
 
+#ifndef VHOSTING
+	if ( hsbfield & HS_VIRTUAL_HOST ) {
+		syslog( LOG_WARNING, "compiled without VHOSTING flag, vhost option (-vh) is ignored." );
+		warnx( "compiled without VHOSTING flag, vhost option (-vh) is ignored." );
+		hsbfield &= ~HS_VIRTUAL_HOST;
+	}
+#endif
+
 	/* Log file. */
 	if ( logfile != (char*) 0 )
 		{
@@ -1136,7 +1144,9 @@ usage( void )
 			    "	-C FILE     config file to use - default: "DEFAULT_CFILE" in running directory\n"
 			    "	-p PORT     listenning port - default: %d\n"
 			    "	-H HOST     host name or address to bind to - default: all available\n"
+#ifdef VHOSTING
 			    "	-vh         enable virtual hosting\n"
+#endif /* VHOSTING */
 			    "	-r|-nor     enable/disable chroot - default: disable to make all cgi works\n"
 #if DEFAULT_CONNLIMIT > 0
 			    "	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: %d\n"

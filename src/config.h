@@ -52,6 +52,10 @@
 #ifndef CHECK_UDID2
 #define CHECK_UDID2
 #endif /* CHECK_UDID2 */
+#else /* OPENUDC */
+#ifndef VHOSTING
+#define VHOSTING
+#endif /* VHOSTING */
 #endif /* OPENUDC */
 
 /* CONFIGURE: CGI programs must match this pattern to get executed.  It's
