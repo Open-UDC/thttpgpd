@@ -23,19 +23,15 @@
  */
 void udc_create( httpd_conn* hc ) {
 	size_t c;
-	ssize_t r;
-	char * cp, * boundary;
-	int i=0, nsigs=1, boundarylen=0;
+	ssize_t r, csize;
+	char * cp, * eol, * boundary=NULL;
+	int i=0, nsigs=1, boundarylen=0, issig;
 
+	gpgme_data_t sheet, * sigs;
 	gpgme_ctx_t gpglctx;
 	gpgme_error_t gpgerr;
-	gpgme_data_t gpgdata;
-	gpgme_import_result_t gpgimport=NULL;
-	gpgme_import_status_t gpgikey=NULL;
-	gpgme_key_t gpgkey=NULL;
-
+	
 	char * buff;
-	int buffsize;
 
 	if ( strncasecmp( hc->contenttype, "multipart/msigned", sizeof("multipart/msigned")-1 ) ) {
 		httpd_send_err(hc, 415, err415title, "", "%.80s unrecognized here, expected multipart/msigned.", hc->contenttype);
@@ -79,13 +75,16 @@ void udc_create( httpd_conn* hc ) {
 		//syslog( LOG_INFO, " 3- cp: %s", cp );
 	}
 
-	if ( boundarylen == 0 ) {
+	if ( boundarylen < 1 ) {
 		httpd_send_err(hc, 400, httpd_err400title, "", err500form, "boundary=" );
 		exit(EXIT_FAILURE);
 	}
 
-	if ( nsigs < 1 ) {
-		httpd_send_err(hc, 501, err501title, "", err501form, "nsigs < 1" );
+	if ( nsigs < 0 )
+		nsigs=-nsigs;
+
+	if ( nsigs == 0 ) {
+		httpd_send_err(hc, 501, err501title, "", err501form, "nsigs == 0" );
 		exit(EXIT_FAILURE);
 	}
 
@@ -94,12 +93,18 @@ void udc_create( httpd_conn* hc ) {
 		exit(EXIT_FAILURE);
 	}
 
-	buffsize=hc->contentlength;
-	buff=malloc(buffsize+1);
-	if (!buff) {
+	cp=boundary;
+	boundary=malloc(boundarylen+5);
+	sigs=malloc(nsigs*sizeof(gpgme_data_t));
+	buff=malloc(hc->contentlength+1);
+	if ( (!buff) || (!sigs) || (!boundary) ) {
 		httpd_send_err(hc, 500, err500title, "", err500form, "m" );
 		exit(EXIT_FAILURE);
 	}
+
+	strcpy(boundary,"--");
+	strncpy(boundary+2,cp,boundarylen);
+	strcpy(boundary+2+boundarylen,"--");
 
 	c = hc->read_idx - hc->checked_idx;
 	if ( c > 0 )
@@ -121,6 +126,60 @@ void udc_create( httpd_conn* hc ) {
 			exit(EXIT_FAILURE);
 		}
 		c += r;
+	}
+	buff[hc->contentlength+1]='\0';
+
+	i=0;
+	cp=buff;
+	//while ( eol=strchr(cp, '\n') ) {
+	while ( !strncmp(cp,boundary,2+boundarylen) ) {
+
+		if ( !strncmp(cp+2+boundarylen,"--",2) ) /* last boundary */
+			break;
+
+		csize=0;
+		issig=0;
+
+		cp=strchr(cp+2+boundarylen, '\n')+1;
+		/* Parse sub-header */
+		while ( (eol=strchr(cp, '\n'))  ) {
+			if ( (eol-cp) < 3) { /* end of sub-header */
+				cp=eol+sizeof(char);
+				break;
+			} else if ( strncasecmp( cp, "Content-Length:", 15 ) == 0 ) {
+				cp = &cp[15];
+				csize = atol( cp );
+			} else	if ( strncasecmp( cp, "Content-Type:", 13 ) == 0 ) {
+				cp = &cp[13];
+				cp += strspn( cp, " \t" );
+				if ( strncasecmp( cp, "application/pgp-signature", 25 ) == 0 )
+					issig=1;
+
+			}
+		}
+		if ( csize < 1 ) {
+			httpd_send_err(hc, 411, err411title, "", "Content-Length is absent or too short (%.80s)", "1");
+			exit(EXIT_FAILURE);
+		}
+		if (issig) {
+			if (i>=nsigs) {
+				httpd_send_err(hc, 400, httpd_err400title, "", err500form, "sigs>nsigs" );
+				exit(EXIT_FAILURE);
+			}
+			if ( ( gpgerr=gpgme_data_new_from_mem(&sigs[i],cp,csize,0) ) != GPG_ERR_NO_ERROR ) {
+				httpd_send_err(hc, 500, err500title, "", err500form, gpgme_strerror(gpgerr) );
+				exit(EXIT_FAILURE);
+			}
+			i++;
+		} else if ( ( gpgerr=gpgme_data_new_from_mem(&sheet,cp,csize,0) ) != GPG_ERR_NO_ERROR ) {
+				httpd_send_err(hc, 500, err500title, "", err500form, gpgme_strerror(gpgerr) );
+				exit(EXIT_FAILURE);
+		}
+		cp+=csize;
+	}
+	if (i!=nsigs) {
+		httpd_send_err(hc, 400, httpd_err400title, "", err500form, "sigs!=nsigs" );
+		exit(EXIT_FAILURE);
 	}
 
 	/* create context */
