@@ -155,10 +155,14 @@ AC_ARG_ENABLE(OpenUDC,
 	[	AC_DEFINE(FORBID_HIDDEN_RESSOURCE)
 		AC_DEFINE(CHECK_UDID2)
 		checkudid2="yes"
-		AC_DEFINE(OPENUDC)
 		extrasubdirs="${extrasubdirs} udc"
 		output="${output} src/udc/Makefile"
 		software="ludd"
+		if test -z "${enableval}" -o "${enableval}" == "yes" ; then
+			AC_DEFINE(OPENUDC,"uni")
+		else
+			AC_DEFINE_UNQUOTED(OPENUDC,"${enableval}")
+		fi
 		if test -z "${user}" ; then
 			user="_ludd"
 		fi

@@ -13,12 +13,18 @@
 
 /* Fingerprint (key or subkey) status */
 typedef enum {
-	FPR_STATUS_UNKNOW = 0,
-	FPR_STATUS_REJECTED = 1,
-	FPR_STATUS_ACTIVE = 2,
-	FPR_STATUS_ALIVE = 3, 
-	FPR_STATUS_ADMIN = 4
-} fpr_status_t;
+	FPR_STATUS_UNKNOWN = 0 , /* Reserved for Futur Use */
+	FPR_STATUS_DELETE = 1 , /* Reserved for Futur Use */
+	FPR_STATUS_REJECTED = 2, /* Reserved for Futur Use */
+	FPR_STATUS_ACTIVE = 3,
+	FPR_STATUS_ALIVE = 4, 
+	FPR_STATUS_ADMIN = 5
+} key_status_t;
+
+typedef struct {
+	char fpr[41];
+	key_status_t status;
+} udc_key_t;
 
 /* required data for next creation_sheet */
 typedef struct {

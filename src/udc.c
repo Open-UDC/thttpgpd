@@ -30,6 +30,7 @@ void udc_create( httpd_conn* hc ) {
 	gpgme_data_t sheet, * sigs;
 	gpgme_ctx_t gpglctx;
 	gpgme_error_t gpgerr;
+	gpgme_verify_result_t result;
 	
 	char * buff;
 
@@ -188,6 +189,13 @@ void udc_create( httpd_conn* hc ) {
 		httpd_send_err(hc, 500, err500title, "", err500form, gpgme_strerror(gpgerr) );
 		exit(EXIT_FAILURE);
 	}
+
+	for (i=0;i<nsigs;i++) {
+		  gpgerr = gpgme_op_verify (gpglctx, sigs[i], sheet, NULL);
+		  result = gpgme_op_verify_result (gpglctx);
+	}
+	// Example of signature usage could be found in gpgme git repository
+	//     // in the gpgme/tests/run-verify.c
 
 
 

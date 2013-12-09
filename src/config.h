@@ -44,18 +44,25 @@
 ** of the ifdef.
 */
 
-/* such cflags SHOULD be set by the cmake/configure OpenUDC options, but if not let's define them here */
 #ifdef OPENUDC
+
+/* the 2 next cflags SHOULD be set by the cmake/configure OpenUDC options, but if not let's define them here */
 #ifndef FORBID_HIDDEN_RESSOURCE
 #define FORBID_HIDDEN_RESSOURCE
 #endif /* FORBID_HIDDEN_RESSOURCE */
 #ifndef CHECK_UDID2
 #define CHECK_UDID2
 #endif /* CHECK_UDID2 */
+#ifndef CURRENCY_CODE
+#define CURRENCY_CODE OPENUDC
+#endif /* CURRENCY_CODE */
+
 #else /* OPENUDC */
+
 #ifndef VHOSTING
 #define VHOSTING
 #endif /* VHOSTING */
+
 #endif /* OPENUDC */
 
 /* CONFIGURE: CGI programs must match this pattern to get executed.  It's

@@ -4776,11 +4776,18 @@ if test "${enable_OpenUDC+set}" = set; then :
 		$as_echo "#define CHECK_UDID2 1" >>confdefs.h
 
 		checkudid2="yes"
-		$as_echo "#define OPENUDC 1" >>confdefs.h
-
 		extrasubdirs="${extrasubdirs} udc"
 		output="${output} src/udc/Makefile"
 		software="ludd"
+		if test -z "${enableval}" -o "${enableval}" == "yes" ; then
+			$as_echo "#define OPENUDC \"uni\"" >>confdefs.h
+
+		else
+			cat >>confdefs.h <<_ACEOF
+#define OPENUDC "${enableval}"
+_ACEOF
+
+		fi
 		if test -z "${user}" ; then
 			user="_ludd"
 		fi
