@@ -7,8 +7,7 @@ prefix="@prefix@" # weirdo requirement for some autotool variables
 LUDDUSER_HOMEDIR="@localstatedir@/@software@"
 KEYSERVER="hkp://pool.sks-keyservers.net"
 refdir="@datarootdir@/@software@"
-
-[ "$SOFTWARE" == ludd ] && OPENUDC=1
+CURRENCY="@currency@"
 
 helpmsg='Usage: '"${0##*/}"' [options]
 Options:
@@ -52,7 +51,7 @@ function ludd_genbotkey {
 				break;
 			else
 				echo "Warning: this id ($myudid) is not a valid udid2" >&2
-				((OPENUDC)) || break;
+				[ "$CURRENCY" ] || break;
 			fi
 		done
 		read -p "your bot name ? " mname
@@ -111,21 +110,30 @@ for ((i=0;$#;)) ; do
 	shift
 done
 
+if [ -d "$dir/pub" -o -d "$dir/sigcache" -o -d "$dir/gpgme" ] ; then
+	read -p "Warning: $dir already contain some expected data. Do you really want to (re)init data in ? (y/n) " answer
+	case "$answer" in
+		Y* | y* | O* | o* ) ;;
+		*) echo "$answer => nothing to do."; exit 2 ;;
+	esac
+fi
+
 mkdir -pv  "$dir/gpgme" "$dir/sigcache" "$dir/pub"
 
 if [[ "$dir" != "$refdir" ]] ; then
 	cp -avf "$refdir/pub/pks" "$dir/pub/"
 	cp -av "$refdir/pub/favicon.ico" "$refdir/pub/robots.txt" "$dir/pub/"
-	if ((OPENUDC)) ; then 
+	if [ "$CURRENCY" ] ; then 
 		cp -avf "$refdir/pub/udid2" "$dir/pub/"
-		cp -avf "$refdir/openudc_init.sh" "$dir"
-		cp -avf "$refdir/pub/udc" "$dir/pub/"
+		mkdir -p "$dir/pub/udc/$CURRENCY"
+		cp -avf "$refdir/pub/udc/$CURRENCY/keys" "$refdir/pub/udc/$CURRENCY/peers" "$dir/pub/udc/$CURRENCY/"
+		echo -n > "$dir/pub/udc/$CURRENCY/synthesis"
 	fi
 fi
 
 if ((isroot)) ; then
 	chown -R "$LUDDUSER" "$dir/sigcache"
-	((OPENUDC)) && chown -R "$LUDDUSER" "$dir/pub/udc"
+	[ "$CURRENCY" ] && chown -R "$LUDDUSER" "$dir/pub/udc"
 fi
 
 mybotkeys=($(gpg --list-secret-keys --with-colons --with-fingerprint "ubot1;" | grep "^fpr" | cut -d: -f 10))
@@ -149,7 +157,7 @@ esac
 
 myudid="$(gpg --list-secret-keys --with-colons ${mybotkeys[$bki]} | sed -n ' s/^\(uid\|sec\):.*(ubot1;\(udid2;c;[A-Z]\{1,20\};[A-Z-]\{1,20\};[0-9-]\{10\};[0-9.e+-]\{14\};[0-9]\+\);\?).*/\2/p ' )"
 if [ -z "$myudid" ] ; then
-    if ((OPENUDC)) ; then
+    if [ "$CURRENCY" ] ; then
 		echo "Error: key ${mybotkeys[$bki]} doesn't contain a valid udid2" >&2
 		exit 3
 	else
@@ -165,8 +173,8 @@ gpg --keyserver "$KEYSERVER" --search-keys "$myudid" #2> /dev/null
 gpg --export "($myudid" | gpg --import --homedir "$dir/gpgme" 2> /dev/null
 gpg --export-secret-keys "${mybotkeys[$bki]}" | gpg --import --homedir "$dir/gpgme" 2> /dev/null
 
-# Set and Export initial keys for OpenUDC
-((OPENUDC)) && [ -f "$dir/openudc_init.sh" ] && sh "$dir/openudc_init.sh" $LUDDUSER
+# If present in the refdir, import some pubkeys (eg. init keys) to the keyring 
+[ "$CURRENCY" ] && gpg --import --homedir "$dir/gpgme" 2> /dev/null < "$refdir/pub/udc/$CURRENCY/pubkeys.asc"
 
 if ((isroot)) ; then
 	chown -R "$LUDDUSER" "$dir/gpgme"

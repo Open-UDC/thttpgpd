@@ -609,6 +609,7 @@ version
 port
 user
 software
+currency
 INSTALL_DATA
 INSTALL_SCRIPT
 INSTALL_PROGRAM
@@ -4776,18 +4777,20 @@ if test "${enable_OpenUDC+set}" = set; then :
 		$as_echo "#define CHECK_UDID2 1" >>confdefs.h
 
 		checkudid2="yes"
-		extrasubdirs="${extrasubdirs} udc"
-		output="${output} src/udc/Makefile"
 		software="ludd"
 		if test -z "${enableval}" -o "${enableval}" == "yes" ; then
 			$as_echo "#define OPENUDC \"uni\"" >>confdefs.h
 
+			currency="uni"
 		else
 			cat >>confdefs.h <<_ACEOF
 #define OPENUDC "${enableval}"
 _ACEOF
 
+			currency="${enableval}"
 		fi
+		extrasubdirs="${extrasubdirs} udc/${currency}"
+		output="${output} src/udc/${currency}/Makefile"
 		if test -z "${user}" ; then
 			user="_ludd"
 		fi
@@ -4815,6 +4818,7 @@ if [ "$checkudid2" ] ; then
 	extrasubdirs="${extrasubdirs} udid2"
 	output="${output} src/udid2/Makefile"
 fi
+
 
 
 cat >>confdefs.h <<_ACEOF
