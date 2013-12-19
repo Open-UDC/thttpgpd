@@ -70,6 +70,9 @@
 #include "timers.h"
 #include "match.h"
 #include "peers.h"
+#ifdef OPENUDC
+#include "udc.h"
+#endif
 
 #ifndef SHUT_WR
 #define SHUT_WR 1
@@ -161,19 +164,24 @@ int stats_simultaneous;
 
 static volatile int got_hup, got_usr1, got_bus, watchdog_flag;
 
+/* contain an array "hc[pid]" to kill childs on exit */
+hctab_t hctab;
+
 /* main context (used for signing) */
 gpgme_ctx_t main_gpgctx;
-
-/* myself (peer) */
-peer_t myself;
 
 #ifdef CHECK_UDID2
 /* regex for udid2;c */
 regex_t udid2c_regex;
 #endif
 
-/* contain an array "hc[pid]" to kill childs on exit */
-hctab_t hctab;
+/* myself (peer) */
+peer_t myself;
+
+#ifdef OPENUDC
+udc_key_t * udckeys;
+ssize_t udckeyssize;
+#endif
 
 /* Forwards. */
 static void parse_args( int argc, char** argv );
@@ -776,9 +784,23 @@ main( int argc, char** argv )
 				LOG_WARNING,
 				"started as root without requesting chroot(), warning only" );
 		}
+
 #ifdef CHECK_UDID2
 	if (regcomp(&udid2c_regex, "^udid2;c;[A-Z]{1,20};[A-Z-]{1,20};[0-9-]{10};[0-9.e+-]{14};[0-9]+", REG_EXTENDED|REG_NOSUB))
 		DIE(1,"Could not compile regex 'udid2;c...' :-(");
+#endif
+
+#ifdef OPENUDC
+	/* Read keys and keys levels */
+	if ( (udckeyssize=udc_read_keys("udc/"CURRENCY_CODE"/keys",&udckeys)) < 1 )
+		DIE(1,"%s: %m :-( %s","udc/"CURRENCY_CODE"/keys","(forget "SOFTWARE_NAME"_init.sh ?)");
+	qsort(udckeys,udckeyssize,sizeof(udc_key_t),(int (*)(const void *, const void *))udc_cmp_keys);
+	if ( udc_check_dupkeys(udckeys,udckeyssize) )
+		DIE(1,"%s: found a duplicate key ! :-(","udc/"CURRENCY_CODE"/keys");
+	if ( udc_write_keys("udc/"CURRENCY_CODE"/.keys",udckeys,udckeyssize) != udckeyssize
+			|| rename("udc/"CURRENCY_CODE"/.keys","udc/"CURRENCY_CODE"/keys") != 0 )
+		DIE(1,"%s: %m (not all key was written)","udc/"CURRENCY_CODE"/.keys");
+
 #endif
 
 	/* Check gpgme version ( http://www.gnupg.org/documentation/manuals/gpgme/Library-Version-Check.html )*/

@@ -14,12 +14,142 @@
 #include <gpgme.h>
 #include <regex.h>
 #include <pthread.h>
+#include <ctype.h>
 
 #include "config.h"
 #include "udc.h"
 #include "libhttpd.h"
 
-/*! manage creation sheet
+/*! read keys (and there status and times) from a keyfile, and store them in an udc_key_t array.
+ * \note: The udc_key_t array is (re)allocated.
+ * \returns the number of key readed, or -1 if an error occurs (cf. errno).
+ */
+ssize_t udc_read_keys(const char * filename, udc_key_t ** keys) {
+	FILE * keysfile;
+	char * line=NULL, * endptr;
+	size_t len = 0, maxkeys=256;
+	char lvl;
+	int i, j=0;
+
+	if ( keys == NULL )
+		return -1;
+
+	*keys=RENEW(*keys, udc_key_t, maxkeys);
+	if ( *keys == NULL )
+		return -1;
+
+	keysfile=fopen(filename, "r");
+	if ( keysfile == NULL )
+		return -1;
+
+	while (getline(&line, &len, keysfile) > 0) {
+
+		for (i=0; isxdigit( line[i] ); i++)
+			line[i]=toupper(line[i]);
+
+		if (line[i] != '\0')
+			lvl=strtol(&line[i+1], &endptr, 10);
+		else
+			lvl=0;
+
+		if ( (i != 40)  || (lvl <= 0) )
+			continue;
+
+		if (j>=maxkeys) {
+			maxkeys+=256;
+			*keys=RENEW(*keys, udc_key_t, maxkeys);
+			if ( *keys == NULL ) {
+				free(line);
+				fclose(keysfile);
+				return -1;
+			}
+		}
+		strncpy((*keys)[j].fpr,line,40);
+		(*keys)[j].fpr[40]='\0';
+		(*keys)[j].level = lvl;
+
+		if (endptr !='\0')
+			(*keys)[j].flags = strtol(endptr+1, &endptr, 10);
+		else
+			(*keys)[j].flags = 0;
+
+		if (endptr !='\0')
+			(*keys)[j].lastsignedt = strtoll(endptr+1, &endptr, 10);
+		else
+			(*keys)[j].lastsignedt = 0;
+
+		if (endptr !='\0')
+			(*keys)[j].lastactivet = strtoll(endptr+1, &endptr, 10);
+		else
+			(*keys)[j].lastactivet = 0;
+		j++;
+	}
+
+	free(line);
+	if (fclose(keysfile) == 0)
+		return j;
+	else
+		return -1;
+}
+
+/*! compare two key by there fingerprint.
+ * May be used by qsort.
+ * \note: key fpr must contain only uppercase hexa digit.
+ */
+int udc_cmp_keys(const udc_key_t * key1, const udc_key_t * key2) {
+	return strcmp(key1->fpr,key2->fpr);
+}
+
+/*! check if an udc_key_t array contain any duplicate fpr
+ * \return a pointer to the first duplicated key, or NULL if no duplicated fpr.
+ */
+udc_key_t * udc_check_dupkeys(udc_key_t * keys, size_t size) {
+	int i;
+	for (i=0;i<size-1;i++) {
+		if (udc_cmp_keys(&keys[i],&keys[i+1]) == 0)
+			return &keys[i];
+	}
+	return NULL;
+}
+
+/*! write keys (and there status and times) to a keysfile.
+ * \returns the number of key written, or a negative number if an error occurs (cf. errno).
+ */
+ssize_t udc_write_keys(const char * filename, udc_key_t * keys, size_t size) {
+	FILE * keysfile;
+	size_t i;
+	int r;
+
+	if ( keys == NULL )
+		return -1;
+
+	keysfile=fopen(filename, "w");
+	if ( keysfile == NULL )
+		return -1;
+
+	for (i=0;i<size;i++) {
+		r=fprintf(keysfile,"%s:%d:%d:%lld:%lld\n",keys[i].fpr,keys[i].level,keys[i].flags,(long long)keys[i].lastsignedt,(long long)keys[i].lastactivet);
+		if (r<0)
+			break;
+	}
+	if (fclose(keysfile) == 0)
+		return i;
+	else
+		return -1;
+}
+
+/*! search a key by its fingerprint in an array, assuming the array is sorted by fingerprint, which are hash (SHA-1) already
+ *\return a pointer to the key in the array, or NULL if the key wasn't found.
+ */
+udc_key_t * udc_search_key(udc_key_t * keys, size_t size, char * fpr) {
+	udc_key_t key;
+	strncpy(key.fpr,fpr,40);
+	key.fpr[40]='\0';
+	/* TODO: optimize the search fonction to something like hsearch, as we are searching for hashed items... */
+	return bsearch(&key,keys,size,sizeof(udc_key_t),(int (*)(const void *, const void *))udc_cmp_keys);
+}
+
+/*! update OpenUDC parameters (creation sheet)
  */
 void udc_create( httpd_conn* hc ) {
 	size_t c;

@@ -11,19 +11,29 @@
 #include "config.h"
 #include "libhttpd.h"
 
-/* Fingerprint (key or subkey) status */
-typedef enum {
-	FPR_STATUS_UNKNOWN = 0 , /* Reserved for Futur Use */
-	FPR_STATUS_DELETE = 1 , /* Reserved for Futur Use */
-	FPR_STATUS_REJECTED = 2, /* Reserved for Futur Use */
-	FPR_STATUS_ACTIVE = 3,
-	FPR_STATUS_ALIVE = 4, 
-	FPR_STATUS_ADMIN = 5
-} key_status_t;
+/* defined key levels */
+enum {
+	FPR_LVL_UNKNOWN = 0 , /* Reserved for Futur Use */
+	FPR_LVL_DELETE = 1 , /* Reserved for Futur Use */
+	FPR_LVL_REJECTED = 2, /* Reserved for Futur Use */
+	FPR_LVL_ACTIVE = 3,
+	FPR_LVL_ALIVE = 4, 
+	FPR_LVL_ADMIN = 5
+};
+
+/* defined flags */
+enum {
+	FPR_FLAG_VALIDATING = (1<<0), /* Act as a mutex to avoid race bug validation */
+	FPR_FLAG_HASVOTE = (1<<1),  /* used to count new parameters votes */
+	FPR_FLAG_TRYMESS = (1<<2),  /* set to one once double spending detected, maybe useless ... ? */
+};
 
 typedef struct {
-	char fpr[41];
-	key_status_t status;
+	char fpr[41]; /* fpr */
+	unsigned char level : 4;
+	unsigned char flags : 4;
+	time_t lastsignedt;
+	time_t lastactivet;
 } udc_key_t;
 
 /* required data for next creation_sheet */
@@ -37,6 +47,13 @@ typedef struct {
 
 /*! udc_init() read and verify databases, set global variables, check peers status and update database.
  */
+
+ssize_t udc_read_keys(const char * filename, udc_key_t ** keys);
+int udc_cmp_keys(const udc_key_t * key1, const udc_key_t * key2);
+udc_key_t * udc_check_dupkeys(udc_key_t * keys, size_t size);
+ssize_t udc_write_keys(const char * filename, udc_key_t * keys, size_t size);
+udc_key_t * udc_search_key(udc_key_t * keys, size_t size, char * fpr);
+//void * udc_update_peers(void *arg);
 //int udc_init(...
 
 /*! udc_create() validate, store and propagate new creation sheet.
