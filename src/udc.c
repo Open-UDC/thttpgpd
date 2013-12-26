@@ -24,7 +24,7 @@
  * \note: The udc_key_t array is (re)allocated.
  * \returns the number of key readed, or -1 if an error occurs (cf. errno).
  */
-ssize_t udc_read_keys(const char * filename, udc_key_t ** keys) {
+int udc_read_keys(const char * filename, udc_key_t ** keys) {
 	FILE * keysfile;
 	char * line=NULL, * endptr;
 	size_t len = 0, maxkeys=256;
@@ -113,9 +113,9 @@ udc_key_t * udc_check_dupkeys(udc_key_t * keys, size_t size) {
 }
 
 /*! write keys (and there status and times) to a keysfile.
- * \returns the number of key written, or a negative number if an error occurs (cf. errno).
+ * \returns the number of key written, or -1 if an error occurs (cf. errno).
  */
-ssize_t udc_write_keys(const char * filename, udc_key_t * keys, size_t size) {
+int udc_write_keys(const char * filename, const udc_key_t * keys, size_t size) {
 	FILE * keysfile;
 	size_t i;
 	int r;
@@ -141,12 +141,118 @@ ssize_t udc_write_keys(const char * filename, udc_key_t * keys, size_t size) {
 /*! search a key by its fingerprint in an array, assuming the array is sorted by fingerprint, which are hash (SHA-1) already
  *\return a pointer to the key in the array, or NULL if the key wasn't found.
  */
-udc_key_t * udc_search_key(udc_key_t * keys, size_t size, char * fpr) {
+udc_key_t * udc_search_key(const udc_key_t * keys, size_t size,const char * fpr) {
 	udc_key_t key;
 	strncpy(key.fpr,fpr,40);
 	key.fpr[40]='\0';
 	/* TODO: optimize the search fonction to something like hsearch, as we are searching for hashed items... */
 	return bsearch(&key,keys,size,sizeof(udc_key_t),(int (*)(const void *, const void *))udc_cmp_keys);
+}
+
+/* read a synthesis file.
+ * \return the total numbers of lvls (which should be equal to the number of key) or a negative number if an error occurs.
+ */
+int udc_read_synthesis(const char * filename, sync_synthesis_t * synth) {
+	FILE * sfile;
+	char * line=NULL, * endptr;
+	size_t len = 0;
+	int i, j, r=0;
+
+	if ( synth == NULL )
+		return -1;
+
+	sfile=fopen(filename, "r");
+	if ( sfile == NULL )
+		return -1;
+
+/*	if (strncmp(line,"#s1",3) != 0 ) {
+		free(line);
+		errno=EMEDIUMTYPE;
+		return -1;
+	}*/
+
+	while (getline(&line, &len, sfile) > 0) {
+		if ( strncmp(line,"num_updates",sizeof("num_updates")-1) == 0 ) {
+			for (i=sizeof("num_updates")-1;line[i];i++)
+				if (line[i] >= '0' && line[i] <= '9')
+					break;
+			synth->nupdates=strtol(&line[i], &endptr, 0);
+		}
+		if ( strncmp(line,"lvl_keys",sizeof("lvl_keys")-1) == 0 ) {
+			for (i=sizeof("lvl_keys")-1;line[i];i++)
+				if (line[i] >= '0' && line[i] <= '9')
+					break;
+			synth->lvls[0]=strtol(&line[i], &endptr, 0);
+			r=synth->lvls[0];
+			for(j=1;j<SIZEOFARRAY(((sync_synthesis_t *)0)->lvls);j++) {
+				if (endptr !='\0')
+					synth->lvls[j] = strtol(endptr+1, &endptr, 10);
+				else
+					synth->lvls[j] = 0;
+				r+= synth->lvls[j];
+			}
+		}
+	}
+
+	free(line);
+	if (fclose(sfile) == 0)
+		return r;
+	else
+		return -1;
+}
+
+
+/* update synthesis lvls from input keys.
+ */
+void udc_update_synthesis(const udc_key_t * keys, size_t size, sync_synthesis_t * synth) {
+	size_t i;
+
+	/*if ( keys == NULL || synth == NULL )
+		return;*/
+
+	for (i=0;i<SIZEOFARRAY(((sync_synthesis_t *)0)->lvls);i++)
+		synth->lvls[i]=0;
+
+	for (i=0;i<size;i++) {
+		if (keys[i].level < SIZEOFARRAY(((sync_synthesis_t *)0)->lvls) )
+			synth->lvls[keys[i].level]++;
+	}
+}
+
+/* read a synthesis file.
+ * \return the total numbers of lvls (which should be equal to the number of key) or a negative number if an error occurs.
+ */
+int udc_write_synthesis(const char * filename, sync_synthesis_t * synth) {
+	FILE * sfile;
+	int i,r,t=0;
+
+	if ( synth == NULL )
+		return -1;
+
+	sfile=fopen(filename, "w");
+	if ( sfile == NULL )
+		return -1;
+
+	r=fprintf(sfile,"#s1 Synthesis\n"
+			"sync_type=OpenUDC\n"
+			"num_updates=%d\n"
+			"lvl_keys=( ",
+			synth->nupdates);
+
+	for (i=0;i<SIZEOFARRAY(((sync_synthesis_t *)0)->lvls);i++) {
+		if (r>0)
+			r=fprintf(sfile,"%d ",synth->lvls[i]);
+		t+=synth->lvls[i];
+	}
+	if (r>0)
+		r=fprintf(sfile,")\n"
+				"num_keys=%d\n",
+				t);
+
+	if (fclose(sfile) == 0 && r>0 )
+		return t;
+	else
+		return -1;
 }
 
 /*! update OpenUDC parameters (creation sheet)

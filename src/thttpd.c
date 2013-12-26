@@ -181,6 +181,7 @@ peer_t myself;
 #ifdef OPENUDC
 udc_key_t * udckeys;
 ssize_t udckeyssize;
+sync_synthesis_t udcsynth;
 #endif
 
 /* Forwards. */
@@ -800,6 +801,17 @@ main( int argc, char** argv )
 	if ( udc_write_keys("udc/"CURRENCY_CODE"/.keys",udckeys,udckeyssize) != udckeyssize
 			|| rename("udc/"CURRENCY_CODE"/.keys","udc/"CURRENCY_CODE"/keys") != 0 )
 		DIE(1,"%s: %m (not all key was written)","udc/"CURRENCY_CODE"/.keys");
+
+	/* Read/update synthesis file */
+	if (udc_read_synthesis("udc/"CURRENCY_CODE"/synthesis",&udcsynth) < 1 ) {
+		syslog( LOG_WARNING,"%s: %s","udc/"CURRENCY_CODE"/synthesis","unexpected data, will be (re)generated");
+		warnx("%s: %s","udc/"CURRENCY_CODE"/synthesis","unexpected data, will be (re)generated");
+		udcsynth.nupdates=0;
+		udc_update_synthesis(udckeys, udckeyssize, &udcsynth);
+		if ( udc_write_synthesis("udc/"CURRENCY_CODE"/.synthesis",&udcsynth) != udckeyssize
+				|| rename("udc/"CURRENCY_CODE"/.synthesis","udc/"CURRENCY_CODE"/synthesis") != 0 )
+			DIE(1,"%s: %m (unable to write synthesis)","udc/"CURRENCY_CODE"/.synthesis");
+	}
 
 #endif
 

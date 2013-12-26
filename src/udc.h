@@ -36,6 +36,11 @@ typedef struct {
 	time_t lastactivet;
 } udc_key_t;
 
+typedef struct {
+	int nupdates;
+	int lvls[FPR_LVL_ADMIN+1];
+} sync_synthesis_t;
+
 /* required data for next creation_sheet */
 typedef struct {
 	int required_votes;
@@ -48,11 +53,16 @@ typedef struct {
 /*! udc_init() read and verify databases, set global variables, check peers status and update database.
  */
 
-ssize_t udc_read_keys(const char * filename, udc_key_t ** keys);
+int udc_read_keys(const char * filename, udc_key_t ** keys);
 int udc_cmp_keys(const udc_key_t * key1, const udc_key_t * key2);
 udc_key_t * udc_check_dupkeys(udc_key_t * keys, size_t size);
-ssize_t udc_write_keys(const char * filename, udc_key_t * keys, size_t size);
-udc_key_t * udc_search_key(udc_key_t * keys, size_t size, char * fpr);
+int udc_write_keys(const char * filename,const udc_key_t * keys, size_t size);
+udc_key_t * udc_search_key(const udc_key_t * keys, size_t size, const char * fpr);
+
+int udc_read_synthesis(const char * filename, sync_synthesis_t * synth);
+void udc_update_synthesis(const udc_key_t * keys, size_t size, sync_synthesis_t * synth);
+int udc_write_synthesis(const char * filename, sync_synthesis_t * synth);
+
 //void * udc_update_peers(void *arg);
 //int udc_init(...
 
