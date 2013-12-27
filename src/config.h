@@ -93,9 +93,11 @@
 #define CGI_PATTERN "*.cgi"
 /* When virtual hosting, enable the central directory on every host: */
 #define CGI_PATTERN "/*/cgi-bin/*"
+/* no cgi at all (but user may define some with -c flag or "cgipat=..." */
+#define CGI_PATTERN ""
 #endif
 
-#define CGI_PATTERN "/cgi-bin/*"
+#define CGI_PATTERN ""
 
 /* CONFIGURE: Requested file or CGI must NOT match this pattern to get signed.
 ** It's a simple shell-style wildcard pattern, with * meaning any string
@@ -113,16 +115,16 @@
 ** -s flag. Such a pattern overrides this compiled-in default.
 **
 ** If no exclusion SIG pattern is specified, neither here nor on the command line,
-** then nothing may be signed by the server (no "Content-Type: multpart/msigned"
-** may be responded). If you want to disable signed responses, just don't define
-** any pattern here (and "sigpat=..." or -s flag won't be read),
+** then everything may be signed by the server ("Content-Type: multpart/msigned"
+** may be responded). If you want to disable completely signed responses, just
+** don't define any pattern here (and "sigpat=..." or -s flag won't be read),
 ** or use the pattern "**".
 **
 ** Note: Unlike CGI checking which follow first symlink destination,
 ** SIG checking is done with the asked filename in the URL, thus permit to
 ** restrict also signing done by embedded actions (like "pks/lookup").
 */
-#define SIG_EXCLUDE_PATTERN "none"
+#define SIG_EXCLUDE_PATTERN ""
 
 /* CONFIGURE: sigcache directory (inside the running one which should be chrooted)	
  * which contain all the cached signatures. If a "multipart/msigned" is asked

@@ -29,6 +29,8 @@
 #define _TIMERS_H_
 
 #include <sys/time.h>
+#include <pthread.h>
+#include <unistd.h>
 
 #ifndef INFTIM
 #define INFTIM -1
@@ -42,6 +44,8 @@ typedef union {
 	void* p;
 	int i;
 	long l;
+	pthread_t tid;
+	pid_t pid;
 	} ClientData;
 
 extern ClientData JunkClientData;		/* for use when you don't care */

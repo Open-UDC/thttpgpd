@@ -2320,9 +2320,8 @@ figure_mime( httpd_conn* hc )
 static void
 cgi_kill2( ClientData client_data, struct timeval* nowP )
 	{
-	pid_t pid;
+	pid_t pid=client_data.pid;
 
-	pid = (pid_t) client_data.i;
 	if ( kill( -pid, SIGKILL ) == 0 )
 		syslog( LOG_ERR, "hard-killed child process group %d", pid );
 	}
@@ -2330,9 +2329,8 @@ cgi_kill2( ClientData client_data, struct timeval* nowP )
 static void
 cgi_kill( ClientData client_data, struct timeval* nowP )
 	{
-	pid_t pid;
+	pid_t pid = client_data.pid;
 
-	pid = (pid_t) client_data.i;
 	if ( kill( pid, SIGINT ) == 0 )
 		syslog( LOG_ERR, "killed child process %d", pid );
 	/* In case this isn't enough, schedule an uncatchable kill. */
@@ -2387,7 +2385,7 @@ static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 
 #ifdef CGI_TIMELIMIT
 	/* Schedule a kill for the child process, in case it runs too long */
-	client_data.i = pid;
+	client_data.pid = pid;
 	if ( tmr_create( (struct timeval*) 0, cgi_kill, client_data, CGI_TIMELIMIT * 1000L, 0 ) == (Timer*) 0 )
 		{
 		syslog( LOG_ERR, "hard-kill %d because %s fail - %m", pid,"tmr_create(cgi_kill...)");
