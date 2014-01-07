@@ -1420,6 +1420,7 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 	hc->last_byte_index = -1;
 	hc->bfield=0;
 	hc->file_address = (char*) 0;
+	hc->boundary[0] = '\0';
 	return GC_OK;
 	}
 
@@ -1959,8 +1960,6 @@ httpd_parse_request( httpd_conn* hc )
 	if ( hc->hs->bfield & HS_VIRTUAL_HOST ) {
 		char * hostdir;
 		struct stat sb;
-		static char * tempfilename;
-		static size_t maxtempfilename = 0;
 		int len, lenh;
 
 		hostdir= hc->reqhost[0] != '\0' ? hc->reqhost : hc->hdrhost ;
@@ -1985,13 +1984,13 @@ httpd_parse_request( httpd_conn* hc )
 
 				/* Prepend hostdir to the filename. */
 				len=strlen(hc->expnfilename);
-				httpd_realloc_str( &tempfilename, &maxtempfilename, len );
-				(void) strcpy( tempfilename, hc->expnfilename );
+				httpd_realloc_str( &hc->tmpbuff, &hc->maxtmpbuff, len );
+				(void) strcpy( hc->tmpbuff, hc->expnfilename );
 
 				httpd_realloc_str( &hc->expnfilename, &hc->maxexpnfilename, lenh + 1 + len );
 				(void) strcpy( hc->expnfilename, hostdir );
 				hc->expnfilename[lenh]='/';
-				(void) strcpy( &hc->expnfilename[lenh+1], tempfilename );
+				(void) strcpy( &hc->expnfilename[lenh+1], hc->tmpbuff );
 
 			} else if ( errno != ENOENT )
 				syslog( LOG_ERR, "vhost stat %.80s - %m", hostdir );
@@ -3190,9 +3189,8 @@ void httpd_parse_resp(interpose_args_t * args) {
 #define HTTPD_PARSE_SIGN_CLEAN() { \
 	gpgme_data_release(gpgdata); \
 	gpgme_data_release(gpgsig); \
-	free(bound); \
 	}
-		char * bound=random_boundary(8);
+		char * bound=random_boundary((char *)hc->boundary,BOUNDARYLEN);
 		gpgme_error_t gpgerr;
 		gpgme_data_t gpgdata,gpgsig;
 		struct gpgme_data_cbs gpgcbs = {
@@ -3322,7 +3320,7 @@ void httpd_parse_resp(interpose_args_t * args) {
 					}
 			}
 		} else {
-			r=snprintf( buf,buflen, "gpgme_op_sign -> %d : %s \015\012\015\012--%s--", gpgerr,gpgme_strerror(gpgerr),bound );
+			r=snprintf( buf,buflen, "\015\012--%s\015\012\015\012gpgme_op_sign -> %d : %s \015\012", bound, gpgerr,gpgme_strerror(gpgerr));
 			r=MIN(r,buflen);
 			if (httpd_write_fully(args->wfd,buf,r) !=r ) {
 				HTTPD_PARSE_SIGN_CLEAN();
@@ -4151,25 +4149,30 @@ httpd_logstats( long secs )
 			(float) str_alloc_size / str_alloc_count );
 	}
 
-/* Allocate and generate a random string of size len from charset [G-Vg-v] */
-char *random_boundary(unsigned short len) {
+/* Generate a random string of size len from charset [G-Vg-v]
+ * If buff is NULL a new string is allocated,
+ * else len + 1 terminating null byte ('\0') will be wrinting into buff
+ *\return a boundary string, or NULL if malloc failed.
+ */
+char *random_boundary(char * buff, unsigned short len) {
 
-    char *p,*q;
+    char *q;
 	static int srand_called=0;
 
-	if ( !(p=malloc(len+1)) )
-		return p;
-	p[len]='\0';
+	if (!buff && !(buff=malloc(len+1)) )
+			return NULL;
+
+	buff[len]='\0';
 
 	/* call srand exactly one time to save bit cpu */
 	if(!srand_called) {
 		srandom(time((time_t *)0));
 		srand_called=1;
 	}
-	for(q=p; len; len--, q++) {
-		*q=(char) (rand()%2?rand()%16+103:rand()%16+71) ;
-		//*q=(char) (rand()%2?(rand()+(unsigned int)p)%16+103:rand()%16+71) ;
+	for(q=buff; len; len--, q++) {
+		//*q=(char) (rand()%2?rand()%16+103:rand()%16+71) ;
+		*q=(char) (rand()%2?(rand()+(unsigned int)buff)%16+103:rand()%16+71) ;
 	}
-	return p;
+	return buff;
 }
 

@@ -74,6 +74,7 @@ typedef struct {
 #define HS_PKS_ADD_MERGE_ONLY (1<<3)
 #define HS_VIRTUAL_HOST (1<<4)
 
+#define BOUNDARYLEN 9
 /* A connection. */
 typedef struct {
 	int initialized;
@@ -108,9 +109,10 @@ typedef struct {
 	char* authorization;
 	char* remoteuser;
 	char* response;
+	char* tmpbuff; /* used to prepare string as parsing and starting request is now multithread, it replace some previous static buff */
 	size_t maxdecodedurl, maxorigfilename, maxexpnfilename, maxencodings,
 		maxpathinfo, maxquery, maxaccept, maxaccepte, maxreqhost, maxhostdir,
-		maxremoteuser, maxresponse;
+		maxremoteuser, maxresponse, maxtmpbuff;
 	size_t responselen;
 	time_t if_modified_since, range_if;
 	ssize_t contentlength; /* maybe use off_t to be able to make bigger POST on 32-bits archs ? */
@@ -122,6 +124,7 @@ typedef struct {
 	struct stat sb;
 	int conn_fd;
 	char* file_address;
+	char boundary[BOUNDARYLEN+1];
 	} httpd_conn;
 
 #define HC_GOT_RANGE (1<<1)  /* if match "d-d" or "d-" , which is only supported (except when asked multipart/msigned on a local file) */
@@ -326,5 +329,5 @@ extern void httpd_logstats( long secs );
 extern int httpd_dprintf( int fd, const char* format, ... );
 
 /* Allocate and generate a random string of size len (from charset [G-Vg-v]) */
-extern char *random_boundary(unsigned short len);
+char * random_boundary(char * buff, unsigned short len);
 #endif /* _LIBHTTPD_H_ */
