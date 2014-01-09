@@ -696,6 +696,12 @@ main( int argc, char** argv )
 	if ( chdir(WEB_DIR) < 0 )
 		DIE(1,"chdir %s - %m %s",WEB_DIR,"(forget "SOFTWARE_NAME"_init.sh ?)");
 
+	/* and update cwd */
+	if (! getcwd( cwd, sizeof(cwd) - 1 ) )
+		DIE(1, "getcwd - %m" );
+	if ( cwd[strlen( cwd ) - 1] != '/' )
+		(void) strcat( cwd, "/" );
+
 	/* Set up to catch signals. */
 #ifdef HAVE_SIGSET
 	(void) sigset( SIGTERM, handle_term );
@@ -1948,7 +1954,7 @@ check_throttles( connecttab* c )
 	c->max_limit = c->min_limit = THROTTLE_NOLIMIT;
 	for ( tnum = 0; tnum < numthrottles && c->numtnums < MAXTHROTTLENUMS;
 		  ++tnum )
-		if ( match( throttles[tnum].pattern, c->hc->expnfilename ) )
+		if ( match( throttles[tnum].pattern, c->hc->realfilename ) )
 			{
 			/* If we're way over the limit, don't even start. */
 			if ( throttles[tnum].rate > throttles[tnum].max_limit * 2 )

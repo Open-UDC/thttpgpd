@@ -92,9 +92,8 @@ typedef struct {
 	char* decodedurl;
 	char* protocol;
 	char* origfilename;
-	char* expnfilename;
+	char* realfilename;
 	char* encodings;
-	char* pathinfo;
 	char* query;
 	char* referer;
 	char* useragent;
@@ -110,9 +109,9 @@ typedef struct {
 	char* remoteuser;
 	char* response;
 	char* tmpbuff; /* used to prepare string as parsing and starting request is now multithread, it replace some previous static buff */
-	size_t maxdecodedurl, maxorigfilename, maxexpnfilename, maxencodings,
-		maxpathinfo, maxquery, maxaccept, maxaccepte, maxreqhost, maxhostdir,
-		maxremoteuser, maxresponse, maxtmpbuff;
+	size_t maxdecodedurl, maxorigfilename, maxencodings,
+		maxtmpbuff, maxquery, maxaccept, maxaccepte, maxreqhost, maxhostdir,
+		maxremoteuser, maxresponse;
 	size_t responselen;
 	time_t if_modified_since, range_if;
 	ssize_t contentlength; /* maybe use off_t to be able to make bigger POST on 32-bits archs ? */

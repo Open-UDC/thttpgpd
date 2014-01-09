@@ -138,14 +138,14 @@ static void defang(const char* str, char* dfstr, int dfsize );
 #ifdef AUTH_FILE
 static void send_authenticate( httpd_conn* hc, char* realm );
 static int b64_decode( const char* str, unsigned char* space, int size );
-static int auth_check( httpd_conn* hc, char* dirname  );
+static int auth_check( httpd_conn* hc ); /* WARNING: NOT thread safe ! (and quiet heavy) */
 #endif /* AUTH_FILE */
 static void send_dirredirect( httpd_conn* hc );
 static int hexit( char c );
 #ifdef GENERATE_INDEXES
 static void strencode( char* to, int tosize, char* from );
 #endif /* GENERATE_INDEXES */
-static char* expand_symlinks( char* path, char** restP, int no_symlink_check );
+//static char* expand_symlinks( char* path, char** restP, int no_symlink_check );
 static char* bufgets( httpd_conn* hc );
 static void de_dotdot( char* file );
 static void init_mime( void );
@@ -856,10 +856,11 @@ b64_decode( const char* str, unsigned char* space, int size )
 
 /* Returns -1 == unauthorized, 0 == no auth file, 1 = authorized. */
 static int
-auth_check( httpd_conn* hc, char* dirname  )
+auth_check( httpd_conn* hc)
 	{
 	static char* authpath;
 	static size_t maxauthpath = 0;
+	char * dirname, *cp;
 	struct stat sb;
 	char authinfo[550];
 	char* authpass;
@@ -876,11 +877,27 @@ auth_check( httpd_conn* hc, char* dirname  )
 	static char* prevcryp;
 	static size_t maxprevcryp = 0;
 
+
+	if ( S_ISDIR(hc->sb.st_mode) )
+		dirname=hc->realfilename;
+	else {
+		httpd_realloc_str( &hc->tmpbuff, &hc->maxtmpbuff, strlen(hc->realfilename) );
+		dirname=hc->tmpbuff;
+		(void) strcpy( dirname, hc->realfilename );
+		cp = strrchr( dirname, '/' );
+		if ( cp == (char*) 0 )
+			(void) strcpy( dirname, "." );
+		else
+			*cp = '\0';
+	}
+
+
 	/* Construct auth filename. */
 	httpd_realloc_str(
 		&authpath, &maxauthpath, strlen( dirname ) + 1 + sizeof(AUTH_FILE) );
 	(void) snprintf( authpath, maxauthpath, "%s/%s", dirname, AUTH_FILE );
 
+			
 	/* Does this directory have an auth file? */
 	if ( stat( authpath, &sb ) < 0 )
 		/* Nope, let the request go through. */
@@ -894,6 +911,27 @@ auth_check( httpd_conn* hc, char* dirname  )
 		send_authenticate( hc, dirname );
 		return -1;
 		}
+
+	/* Is it the authorization file ? */
+	if ( !S_ISDIR(hc->sb.st_mode) && 
+			(strcmp( hc->realfilename, AUTH_FILE ) == 0 /* for the root directory */
+			|| strcmp(hc->realfilename, authpath) ) )
+		{
+		syslog(
+			LOG_NOTICE,
+			"%.80s URL \"%.80s\" tried to retrieve an auth file",
+			hc->client_addr, hc->encodedurl );
+		httpd_send_err(
+			hc, 403, err403title, "",
+			ERROR_FORM( err403form, "The requested URL '%.80s' is an authorization file, retrieving it is not permitted.\n" ), hc->encodedurl );
+		return -1;
+		}
+	/* Note : Jef's code for previous test was not bad : 
+	if ( expnlen == sizeof(AUTH_FILE)-1 &&  strcmp( hc->expnfilename, AUTH_FILE ) == 0 )
+	else if ( expnlen >= sizeof(AUTH_FILE) &&
+			  strcmp( &(hc->expnfilename[expnlen - sizeof(AUTH_FILE) + 1]), AUTH_FILE ) == 0 &&
+			  hc->expnfilename[expnlen - sizeof(AUTH_FILE)] == '/' ) */
+	
 
 	/* Decode it. */
 	l = b64_decode(
@@ -1106,6 +1144,7 @@ strencode( char* to, int tosize, char* from )
 	}
 #endif /* GENERATE_INDEXES */
 
+#if 0
 /* Expands all symlinks in the given filename, eliding ..'s and leading /'s.
 ** Returns the expanded path (pointer to static string), or (char*) 0 on
 ** errors.  Also returns, in the string pointed to by restP, any trailing
@@ -1328,7 +1367,7 @@ expand_symlinks( char* path, char** restP, int no_symlink_check )
 		(void) strcpy( checked, "." );
 	return checked;
 	}
-
+#endif
 
 int
 httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
@@ -1341,15 +1380,13 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 		hc->read_size = 0;
 		httpd_realloc_str( &hc->read_buf, &hc->read_size, 500 );
 		hc->maxdecodedurl =
-			hc->maxorigfilename = hc->maxexpnfilename = hc->maxencodings =
-			hc->maxpathinfo = hc->maxquery = hc->maxaccept =
+			hc->maxorigfilename = hc->maxencodings =
+			hc->maxtmpbuff = hc->maxquery = hc->maxaccept =
 			hc->maxaccepte = hc->maxreqhost = hc->maxhostdir =
 			hc->maxremoteuser = hc->maxresponse = 0;
 		httpd_realloc_str( &hc->decodedurl, &hc->maxdecodedurl, 1 );
 		httpd_realloc_str( &hc->origfilename, &hc->maxorigfilename, 1 );
-		httpd_realloc_str( &hc->expnfilename, &hc->maxexpnfilename, 0 );
 		httpd_realloc_str( &hc->encodings, &hc->maxencodings, 0 );
-		httpd_realloc_str( &hc->pathinfo, &hc->maxpathinfo, 0 );
 		httpd_realloc_str( &hc->query, &hc->maxquery, 0 );
 		httpd_realloc_str( &hc->accept, &hc->maxaccept, 0 );
 		httpd_realloc_str( &hc->accepte, &hc->maxaccepte, 0 );
@@ -1391,9 +1428,7 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 	hc->decodedurl[0] = '\0';
 	hc->protocol = "UNKNOWN";
 	hc->origfilename[0] = '\0';
-	hc->expnfilename[0] = '\0';
 	hc->encodings[0] = '\0';
-	hc->pathinfo[0] = '\0';
 	hc->query[0] = '\0';
 	hc->referer = "";
 	hc->useragent = "";
@@ -1603,7 +1638,6 @@ httpd_parse_request( httpd_conn* hc )
 	char* reqhost;
 	char* eol;
 	char* cp;
-	char* pi;
 
 	hc->checked_idx = 0;		/* reset */
 	method_str = bufgets( hc );
@@ -1942,15 +1976,11 @@ httpd_parse_request( httpd_conn* hc )
 	** may require the entire request.
 	*/
 
-	/* Copy original filename to expanded filename. */
-	httpd_realloc_str(
-		&hc->expnfilename, &hc->maxexpnfilename, strlen( hc->origfilename ) );
-	(void) strcpy( hc->expnfilename, hc->origfilename );
-
 	/* Tilde mapping. */
 	/*if ( hc->expnfilename[0] == '~' )
 		{}*/
 
+	//syslog( LOG_INFO, "hc->realfilename: %s", hc->realfilename ); // hc->realfilename should be null
 #ifdef VHOSTING
 	/* Virtual host mapping ("el cheapo"). */
 	/* We differ a little bit from specification (http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.2):
@@ -1958,11 +1988,12 @@ httpd_parse_request( httpd_conn* hc )
 	 * from the main directory ( while RFC 2616 tells to return a HTTP error 400)
 	 */
 	if ( hc->hs->bfield & HS_VIRTUAL_HOST ) {
-		char * hostdir;
+		char * hostdir, * toexpand;
 		struct stat sb;
 		int len, lenh;
 
 		hostdir= hc->reqhost[0] != '\0' ? hc->reqhost : hc->hdrhost ;
+		toexpand=hc->origfilename;
 
 		if ( hostdir[0] != '\0' ) {
 			/* Remove port number if given (Note: we assume that given host isn't an IPv6 address) */
@@ -1983,14 +2014,12 @@ httpd_parse_request( httpd_conn* hc )
 				strcpy( &hc->hostdir[1], hostdir ); */
 
 				/* Prepend hostdir to the filename. */
-				len=strlen(hc->expnfilename);
-				httpd_realloc_str( &hc->tmpbuff, &hc->maxtmpbuff, len );
-				(void) strcpy( hc->tmpbuff, hc->expnfilename );
-
-				httpd_realloc_str( &hc->expnfilename, &hc->maxexpnfilename, lenh + 1 + len );
-				(void) strcpy( hc->expnfilename, hostdir );
-				hc->expnfilename[lenh]='/';
-				(void) strcpy( &hc->expnfilename[lenh+1], hc->tmpbuff );
+				len=strlen(hc->origfilename);
+				httpd_realloc_str( &hc->tmpbuff, &hc->maxtmpbuff, lenh + 1 + len );
+				(void) strcpy( hc->tmpbuff, hostdir );
+				hc->tmpbuff[lenh]='/';
+				(void) strcpy( &hc->tmpbuff[lenh+1], hc->origfilename );
+				toexpand=hc->tmpbuff;
 
 			} else if ( errno != ENOENT )
 				syslog( LOG_ERR, "vhost stat %.80s - %m", hostdir );
@@ -1999,49 +2028,26 @@ httpd_parse_request( httpd_conn* hc )
 			if ( cp != (char*) 0 )
 				*cp = ':';
 		}
+		hc->realfilename=realpath(toexpand,NULL);
 	}
+	else
 #endif /* VHOSTING */
+	/* Expand all symbolic links in the filename. Since Posix-2008 realpath is (thread) safe on almost all platform */
+		hc->realfilename=realpath(hc->origfilename,NULL);
 
-	/* Expand all symbolic links in the filename.  This also gives us
-	** any trailing non-existing components, for pathinfo.
-	*/
-	cp = expand_symlinks( hc->expnfilename, &pi, (hc->hs->bfield & HS_NO_SYMLINK_CHECK));
-	if ( cp == (char*) 0 )
-		{
-		httpd_send_err( hc, 500, err500title, "", err500form, hc->encodedurl );
-		return -1;
-		}
-	httpd_realloc_str( &hc->expnfilename, &hc->maxexpnfilename, strlen( cp ) );
-	(void) strcpy( hc->expnfilename, cp );
-	httpd_realloc_str( &hc->pathinfo, &hc->maxpathinfo, strlen( pi ) );
-	(void) strcpy( hc->pathinfo, pi );
-
-	/* Remove pathinfo stuff from the original filename too. */
-	/* Jbar: I don't see any reason to do so, and I need origfilename with such stuff for embedded action ...
-	//syslog(LOG_INFO, "filename %s - %s ", hc->origfilename, hc->expnfilename );
-	if ( hc->pathinfo[0] != '\0' )
-		{
-		int i;
-		i = strlen( hc->origfilename ) - strlen( hc->pathinfo );
-		if ( strcmp( &hc->origfilename[i], hc->pathinfo ) == 0 )
-			{
-			if ( i == 0 ) hc->origfilename[0] = '\0';
-			else hc->origfilename[i - 1] = '\0';
-			}
-		}*/
-	//syslog(LOG_INFO, "filename %s - %s ", hc->origfilename, hc->pathinfo );
-
-	/* If the expanded filename is an absolute path, check that it's still
+	/* If the expanded filename is not null, check that it's still
 	** within the current directory or the alternate directory.
 	*/
-	if ( hc->expnfilename[0] == '/' )
-		{
-		if ( strncmp(
-				 hc->expnfilename, hc->hs->cwd, strlen( hc->hs->cwd ) ) == 0 )
+	if ( hc->realfilename ) {
+		size_t cwdlen=strlen( hc->hs->cwd );
+		if ( strncmp(hc->realfilename, hc->hs->cwd, cwdlen -1) == 0 
+				&& ( hc->realfilename[cwdlen-1]=='\0' || hc->realfilename[cwdlen-1]=='/' ) )
 			{
-			/* Elide the current directory. */
-			(void) strcpy(
-				hc->expnfilename, &hc->expnfilename[strlen( hc->hs->cwd )] );
+				if (hc->realfilename[cwdlen-1]=='\0') /* if realpath() behave differently on differeny platforms: || ( hc->realfilename[cwdlen-1]=='/' && hc->realfilename[cwdlen]=='\0' ) */
+					strcpy(hc->realfilename,".");
+				else
+					/* Elide the current directory. */
+					strcpy(hc->realfilename, &hc->realfilename[cwdlen] );
 			}
 		else
 			{
@@ -2054,7 +2060,8 @@ httpd_parse_request( httpd_conn* hc )
 				hc->encodedurl );
 			return -1;
 			}
-		}
+	} else if (errno != ENOENT)
+		syslog( LOG_ERR, "realpath %.80s - %m", hc->origfilename);
 
 	return 0;
 	}
@@ -2147,6 +2154,8 @@ httpd_close_conn( httpd_conn* hc, struct timeval* nowP )
 		(void) close( hc->conn_fd );
 		hc->conn_fd = -1;
 		}
+	free( (void*) hc->realfilename );
+	hc->realfilename=NULL;
 	}
 
 void
@@ -2158,9 +2167,7 @@ httpd_destroy_conn( httpd_conn* hc )
 		free( (void*) hc->read_buf );
 		free( (void*) hc->decodedurl );
 		free( (void*) hc->origfilename );
-		free( (void*) hc->expnfilename );
 		free( (void*) hc->encodings );
-		free( (void*) hc->pathinfo );
 		free( (void*) hc->query );
 		free( (void*) hc->accept );
 		free( (void*) hc->accepte );
@@ -2234,11 +2241,11 @@ figure_mime( httpd_conn* hc )
 
 	/* Peel off encoding extensions until there aren't any more. */
 	n_me_indexes = 0;
-	for ( prev_dot = &hc->expnfilename[strlen(hc->expnfilename)]; ; prev_dot = dot )
+	for ( prev_dot = &hc->realfilename[strlen(hc->realfilename)]; ; prev_dot = dot )
 		{
-		for ( dot = prev_dot - 1; dot >= hc->expnfilename && *dot != '.'; --dot )
+		for ( dot = prev_dot - 1; dot >= hc->realfilename && *dot != '.'; --dot )
 			;
-		if ( dot < hc->expnfilename )
+		if ( dot < hc->realfilename )
 			{
 			/* No dot found.  No more encoding extensions, and no type
 			** extension either.
@@ -2347,7 +2354,7 @@ static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 	httpd_conn** tmphcs;
 
 	++hc->hs->cgi_count;
-	syslog( LOG_INFO, "%s spawned %s process %d for '%.200s (%.80s)'", hc->client_addr, type, pid, hc->expnfilename, hc->pathinfo);
+	syslog( LOG_INFO, "%s spawned %s process %d for '%.200s'", hc->client_addr, type, pid, hc->origfilename);
 
 	/* set the process group id to a new one for hard killing of all the process group (cgi_kill2,...)) */
 	if (setpgid(pid,0)) {
@@ -2509,9 +2516,9 @@ static void ls(httpd_conn* hc) {
 	time_t now;
 	char* timestr;
 
-	dirp = opendir( hc->expnfilename );
+	dirp = opendir( hc->realfilename );
 	if ( dirp == (DIR*) 0 ) {
-		syslog( LOG_ERR, "opendir %.80s - %m", hc->expnfilename );
+		syslog( LOG_ERR, "opendir %.80s - %m", hc->realfilename );
 		httpd_send_err( hc, 404, err404title, "", err404form, hc->encodedurl );
 		exit(1);
 	}
@@ -2588,12 +2595,12 @@ mode  links  bytes  last-changed  name\n\
 		{
 		httpd_realloc_str(
 			&name, &maxname,
-			strlen( hc->expnfilename ) + 1 + strlen( nameptrs[i] ) );
+			strlen( hc->realfilename ) + 1 + strlen( nameptrs[i] ) );
 		httpd_realloc_str(
 			&rname, &maxrname,
 			strlen( hc->origfilename ) + 1 + strlen( nameptrs[i] ) );
-		if ( hc->expnfilename[0] == '\0' ||
-			 strcmp( hc->expnfilename, "." ) == 0 )
+		if ( hc->realfilename[0] == '\0' ||
+			 strcmp( hc->realfilename, "." ) == 0 )
 			{
 			(void) strcpy( name, nameptrs[i] );
 			(void) strcpy( rname, nameptrs[i] );
@@ -2601,7 +2608,7 @@ mode  links  bytes  last-changed  name\n\
 		else
 			{
 			(void) snprintf( name, maxname,
-				"%s/%s", hc->expnfilename, nameptrs[i] );
+				"%s/%s", hc->realfilename, nameptrs[i] );
 			if ( strcmp( hc->origfilename, "." ) == 0 )
 				(void) snprintf( rname, maxrname,
 					"%s", nameptrs[i] );
@@ -2755,19 +2762,6 @@ make_envp( httpd_conn* hc )
 	envp[envn++] = build_env( "SERVER_PORT=%s", buf );
 	envp[envn++] = build_env(
 		"REQUEST_METHOD=%s", httpd_method_str( hc->method ) );
-	if ( hc->pathinfo[0] != '\0' )
-		{
-		char* cp2;
-		size_t l;
-		envp[envn++] = build_env( "PATH_INFO=/%s", hc->pathinfo );
-		l = strlen( hc->hs->cwd ) + strlen( hc->pathinfo ) + 1;
-		cp2 = NEW( char, l );
-		if ( cp2 != (char*) 0 )
-			{
-			(void) snprintf( cp2, l, "%s%s", hc->hs->cwd, hc->pathinfo );
-			envp[envn++] = build_env( "PATH_TRANSLATED=%s", cp2 );
-			}
-		}
 	envp[envn++] = build_env(
 		"SCRIPT_NAME=/%s", strcmp( hc->origfilename, "." ) == 0 ?
 		"" : hc->origfilename );
@@ -2832,11 +2826,11 @@ make_argp( httpd_conn* hc )
 	if ( argp == (char**) 0 )
 		return (char**) 0;
 
-	argp[0] = strrchr( hc->expnfilename, '/' );
+	argp[0] = strrchr( hc->realfilename, '/' );
 	if ( argp[0] != (char*) 0 )
 		++argp[0];
 	else
-		argp[0] = hc->expnfilename;
+		argp[0] = hc->realfilename;
 
 	argn = 1;
 	/* According to the CGI spec at http://hoohoo.ncsa.uiuc.edu/cgi/cl.html,
@@ -3165,8 +3159,8 @@ void httpd_parse_resp(interpose_args_t * args) {
 #ifdef SIG_CACHEDIR
 		if ( stat(SIG_CACHE_DIR,&sts) < 0 || !S_ISDIR(sts.st_mode) ) {
 			syslog( LOG_ERR,"invalid cache dir %s - %m",SIG_CACHE_DIR);
-		} else if ( snprintf(fcache,MAXPATHLEN,"%s/%s",SIG_CACHE_DIR,hc->expnfilename) >= MAXPATHLEN ) {
-			syslog( LOG_ERR,"too big cache path - %s",hc->expnfilename);
+		} else if ( snprintf(fcache,MAXPATHLEN,"%s/%s",SIG_CACHE_DIR,hc->realfilename) >= MAXPATHLEN ) {
+			syslog( LOG_ERR,"too big cache path - %s",hc->realfilename);
 		} else if (!(hc->bfield & HC_GOT_RANGE)){
 			use_cache=2; /* by default: do the cache */
 			if ( stat(fcache,&sts) == 0 ) { 
@@ -3508,11 +3502,11 @@ cgi_child( httpd_conn* hc ) {
 	** to the program's own directory.  This isn't in the CGI 1.1
 	** spec, but it's what other HTTP servers do,
 	** and run it. */
-	execve(chdir_path(hc->expnfilename), argp, envp );
+	execve(chdir_path(hc->realfilename), argp, envp );
 
 	/* Something went wrong. */
 	openlog( argv0, LOG_NDELAY|LOG_PID, LOG_FACILITY );
-	syslog( LOG_ERR, "execve %.80s - %m", hc->expnfilename );
+	syslog( LOG_ERR, "execve %.80s - %m", hc->realfilename );
 	httpd_send_err( hc, 500, err500title, "", err500form, hc->encodedurl );
 	shutdown( hc->conn_fd, SHUT_WR );
 	exit(EXIT_FAILURE);
@@ -3569,19 +3563,9 @@ cgi( httpd_conn* hc )
  */
 int
 httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
-	static char* indexname;
-	static size_t maxindexname = 0;
 	static const char* index_names[] = { INDEX_NAMES };
 	int i;
-#ifdef AUTH_FILE
-	static char* dirname;
-	static size_t maxdirname = 0;
-#endif /* AUTH_FILE */
 	size_t expnlen, indxlen;
-	char* cp;
-	char* pi;
-
-	expnlen = strlen( hc->expnfilename );
 
 	if ( hc->method != METHOD_GET && hc->method != METHOD_HEAD &&
 		 hc->method != METHOD_POST )
@@ -3607,8 +3591,16 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 	}
 #endif
 
+	/* If there's no realfilename, it's should be a non-existent file. */
+	if ( ! hc->realfilename ) {
+		httpd_send_err( hc, 404, err404title, "", err404form, hc->encodedurl );
+		return -1;
+	}
+
+	expnlen = strlen( hc->realfilename );
+
 	/* Stat the file. */
-	if ( stat( hc->expnfilename, &hc->sb ) < 0 )
+	if ( stat( hc->realfilename, &hc->sb ) < 0 )
 		{
 		httpd_send_err( hc, 500, err500title, "", err500form, hc->encodedurl );
 		return -1;
@@ -3634,8 +3626,8 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 
 #ifdef FORBID_HIDDEN_RESSOURCE
 	/* Is it hidden ?  ( basename or a parent dir beginning with a '.' ) */
-	/* Note: we have stat expnfilename wich is, if request was on a symlink, the symlink destination */
-	cp=hc->expnfilename;
+	/* Note: we have stat realfilename wich is, if request was on a symlink, the symlink destination */
+	cp=hc->realfilename;
 	do {
 		if ( cp[0] == '.' && cp[1] != '\0' ) {
 			httpd_send_err(
@@ -3647,19 +3639,15 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 	} while ( (cp=strchr(cp, '/')) && cp++ );
 #endif
 
+#ifdef AUTH_FILE
+		/* Check authorization for this directory. */
+		if ( auth_check( hc ) == -1 )
+			return -1;
+#endif /* AUTH_FILE */
+
 	/* Is it a directory? */
 	if ( S_ISDIR(hc->sb.st_mode) )
 		{
-		/* If there's pathinfo, it's just a non-existent file. */
-		if ( hc->pathinfo[0] != '\0' ) {
-			/*syslog(
-				LOG_INFO,
-				"%.80s is non-existent (%.80s) ",
-				hc->pathinfo , hc->decodedurl );*/
-			httpd_send_err( hc, 404, err404title, "", err404form, hc->encodedurl );
-			return -1;
-		}
-
 		/* Special handling for directory URLs that don't end in a slash.
 		** We send back an explicit redirect with the slash, because
 		** otherwise many clients can't build relative URLs properly.
@@ -3676,16 +3664,16 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 		for ( i = 0; i < SIZEOFARRAY(index_names); ++i )
 			{
 			httpd_realloc_str(
-				&indexname, &maxindexname,
+				&hc->tmpbuff, &hc->maxtmpbuff,
 				expnlen + 1 + strlen( index_names[i] ) );
-			(void) strcpy( indexname, hc->expnfilename );
-			indxlen = strlen( indexname );
-			if ( indxlen == 0 || indexname[indxlen - 1] != '/' )
-				(void) strcat( indexname, "/" );
-			if ( strcmp( indexname, "./" ) == 0 )
-				indexname[0] = '\0';
-			(void) strcat( indexname, index_names[i] );
-			if ( stat( indexname, &hc->sb ) >= 0 )
+			(void) strcpy( hc->tmpbuff, hc->realfilename );
+			indxlen = strlen( hc->tmpbuff );
+			if ( indxlen == 0 || hc->tmpbuff[indxlen - 1] != '/' )
+				(void) strcat( hc->tmpbuff, "/" );
+			if ( strcmp( hc->tmpbuff, "./" ) == 0 )
+				hc->tmpbuff[0] = '\0';
+			(void) strcat( hc->tmpbuff, index_names[i] );
+			if ( stat( hc->tmpbuff, &hc->sb ) >= 0 )
 				goto got_one;
 			}
 
@@ -3704,11 +3692,6 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 				hc->encodedurl );
 			return -1;
 			}
-#ifdef AUTH_FILE
-		/* Check authorization for this directory. */
-		if ( auth_check( hc, hc->expnfilename ) == -1 )
-			return -1;
-#endif /* AUTH_FILE */
 
 		/* Ok, generate an index. */
 		return launch_process(ls, hc, METHOD_GET, "indexing");
@@ -3724,18 +3707,37 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 #endif /* GENERATE_INDEXES */
 
 		got_one: ;
-		/* Got an index file.  Expand symlinks again.  More pathinfo means
-		** something went wrong.
+		/* Got an index file.  Expand symlinks again.
 		*/
-		cp = expand_symlinks( indexname, &pi, (hc->hs->bfield & HS_NO_SYMLINK_CHECK));
-		if ( cp == (char*) 0 || pi[0] != '\0' )
-			{
+		free(hc->realfilename);
+		hc->realfilename=realpath(hc->tmpbuff,NULL);
+
+		/* If the expanded filename is not null, check that it's still
+		** within the current directory or the alternate directory.
+		*/
+		if ( hc->realfilename ) {
+			if ( strncmp(
+					 hc->realfilename, hc->hs->cwd, strlen( hc->hs->cwd ) ) == 0 )
+				{
+				/* Elide the current directory. */
+				(void) strcpy(
+					hc->realfilename, &hc->realfilename[strlen( hc->hs->cwd )] );
+				}
+			else
+				{
+				syslog(
+					LOG_NOTICE, "%.80s URL \"%.80s\" goes outside the web tree",
+					hc->client_addr, hc->encodedurl );
+				httpd_send_err(
+					hc, 403, err403title, "",
+					ERROR_FORM( err403form, "The requested URL '%.80s' resolves to a file outside the permitted web server directory tree.\n" ),
+					hc->encodedurl );
+				return -1;
+				}
+		} else {
 			httpd_send_err( hc, 500, err500title, "", err500form, hc->encodedurl );
 			return -1;
-			}
-		expnlen = strlen( cp );
-		httpd_realloc_str( &hc->expnfilename, &hc->maxexpnfilename, expnlen );
-		(void) strcpy( hc->expnfilename, cp );
+		}
 
 		/* Now, is the index version world-readable or world-executable? */
 		if ( ! ( hc->sb.st_mode & ( S_IROTH | S_IXOTH ) ) )
@@ -3765,55 +3767,6 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 		return -1;
 		}
 
-#ifdef AUTH_FILE
-	/* Check authorization for this directory. */
-	httpd_realloc_str( &dirname, &maxdirname, expnlen );
-	(void) strcpy( dirname, hc->expnfilename );
-	cp = strrchr( dirname, '/' );
-	if ( cp == (char*) 0 )
-		(void) strcpy( dirname, "." );
-	else
-		*cp = '\0';
-	if ( auth_check( hc, dirname ) == -1 )
-		return -1;
-
-	/* Check if the filename is the AUTH_FILE itself - that's verboten. */
-	/* WARNING: If AUTH_FILE doesn't expand to something hidden (those with a path element begining with '.')
-	 *			and program is compiled with FORBID_HIDDEN_RESSOURCE cflag,
-	 *			then AUTH_FILE is readable !!! */
-#ifndef FORBID_HIDDEN_RESSOURCE
-	if ( expnlen == sizeof(AUTH_FILE) - 1 )
-		{
-		if ( strcmp( hc->expnfilename, AUTH_FILE ) == 0 )
-			{
-			syslog(
-				LOG_NOTICE,
-				"%.80s URL \"%.80s\" tried to retrieve an auth file",
-				hc->client_addr, hc->encodedurl );
-			httpd_send_err(
-				hc, 403, err403title, "",
-				ERROR_FORM( err403form, "The requested URL '%.80s' is an authorization file, retrieving it is not permitted.\n" ),
-				hc->encodedurl );
-			return -1;
-			}
-		}
-	else if ( expnlen >= sizeof(AUTH_FILE) &&
-			  strcmp( &(hc->expnfilename[expnlen - sizeof(AUTH_FILE) + 1]), AUTH_FILE ) == 0 &&
-			  hc->expnfilename[expnlen - sizeof(AUTH_FILE)] == '/' )
-		{
-		syslog(
-			LOG_NOTICE,
-			"%.80s URL \"%.80s\" tried to retrieve an auth file",
-			hc->client_addr, hc->encodedurl );
-		httpd_send_err(
-			hc, 403, err403title, "",
-			ERROR_FORM( err403form, "The requested URL '%.80s' is an authorization file, retrieving it is not permitted.\n" ),
-			hc->encodedurl );
-		return -1;
-		}
-#endif /* FORBID_HIDDEN_RESSOURCE */
-#endif /* AUTH_FILE */
-
 	/* If it's world executable and not in the CGI area, or if there's 
 	** pathinfo, someone's trying to either serve or run a non-CGI
 	** file as CGI.  Either case is prohibited.
@@ -3821,7 +3774,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 	if ( hc->sb.st_mode & S_IXOTH )
 		{	
 		if ( hc->hs->cgi_pattern != (char*) 0 
-		&& match( hc->hs->cgi_pattern, hc->expnfilename ) )
+		&& match( hc->hs->cgi_pattern, hc->realfilename ) )
 			return cgi( hc );
 		else
 			{
@@ -3835,18 +3788,6 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 			return -1;
 			}
 		}
-	if ( hc->pathinfo[0] != '\0' )
-		{
-		syslog(
-			LOG_INFO, "%.80s URL \"%.80s\" has pathinfo but isn't CGI",
-			hc->client_addr, hc->encodedurl );
-		httpd_send_err(
-			hc, 403, err403title, "",
-			ERROR_FORM( err403form, "The requested URL '%.80s' resolves to a file plus CGI-style pathinfo, but the file is not a valid CGI file.\n" ),
-			hc->encodedurl );
-		return -1;
-		}
-
 	/* Fill in last_byte_index and first_byte_index,, if necessary. */
 	if (hc->bfield & HC_GOT_RANGE) {
 		if ( hc->first_byte_index < 0 ) {
@@ -3872,7 +3813,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 			hc->sb.st_mtime );
 		}
 	else {
-		hc->file_address = mmc_map( hc->expnfilename, &(hc->sb), nowP );
+		hc->file_address = mmc_map( hc->realfilename, &(hc->sb), nowP );
 		if ( hc->file_address == (char*) 0 ) {
 			httpd_send_err( hc, 500, err500title, "", err500form, hc->encodedurl );
 			return -1;
