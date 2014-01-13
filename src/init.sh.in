@@ -249,12 +249,6 @@ port=$myport
 # unknow  keys  in  your keyring, you shouldn't use this.
 #newkeys
 
-# Do a chroot() at initialization time, restricting file access to the program's
-# current directory. If chroot is the compiled-in default, then nochroot disables
-# it. See $SOFTWARE(8) for details.
-#nochroot
-#chroot
-
 # The number of maximum simulateous connexion per client (ip). 
 # This use external tool iptables (which have to be in your \$PATH and need
 # the root privileges).

@@ -16,7 +16,6 @@ thttpgpd is a tiny/turbo/throttling HTTP server with OpenPGP features.
 .RB [ -H
 .IR host ]
 .RB [ -vh ]
-.RB [ -r | -nor ]
 .RB [ -L
 .IR connlimit ]
 .RB [ -c
@@ -85,14 +84,6 @@ The config-file option name for this flag is "host".
 .B -vh
 Enable a basic virtual hosting (see below).
 The config-file option name for this flag is "vhost".
-.TP
-.B -r
-Do a chroot() at initialization time, restricting file access
-to the program's current directory.
-If -r is the compiled-in default, then -nor disables it.
-See below for details.
-The config-file option names for this flag are "chroot" and "nochroot",
-and the config.h option is ALWAYS_CHROOT.
 .TP
 .B -L
 Specifies the number of maximum simultaneous connexion per client (ip). 
@@ -226,46 +217,6 @@ u may also create symlinks, like so:
   ln -s www.joe.acme.com joe.acme.com
   ln -s www.jane.acme.com jane.acme.com
 .fi
-.SH "CHROOT"
-.PP
-chroot() is a system call that restricts the program's view
-of the filesystem to the current directory and directories
-below it.
-The restriction is inherited by child processes, so CGI programs get it too.
-It becomes impossible for remote users to access any file
-outside of the initial directory (through CGI programs, as HTTP request are
-checked and can't go outside of WEB_DIR, even with symlinks).
-The only downside is that only root can call chroot(), so this means
-the program must be started as root.
-However, the last thing it does during initialization is to
-give up root access by becoming another user, so this is safe.
-.PP
-The program can also be compile-time configured to always
-do a chroot(), without needing the -r flag.
-.PP
-Note that this is a very strong security measure, and you have to make sure
-any shells, utilities, and config files used by your CGI programs and
-scripts are available in the chroot.
-If you have CGI disabled, or if you make a policy that all CGI programs
-must be written in a compiled language such as C and statically linked,
-then you probably don't have to do any setup at all.
-.PP
-.B TO TEST:
-does OpenPGP features works in a chrooted environnement ?
-.PP
-However, one thing you should do is tell syslogd about the chroot tree,
-so that thttpd can still generate syslog messages.
-Check your system's syslodg man page for how to do this.
-In FreeBSD you would put something like this in /etc/rc.conf:
-.nf
-    syslogd_flags="-l /usr/local/www/data/dev/log"
-.fi
-Substitute in your own chroot tree's pathname, of course.
-Don't worry about creating the log socket, syslogd wants to do that itself.
-(You may need to create the dev directory.)
-In Linux the flag is -a instead of -l, and there may be other differences.
-.PP
-Relevant config.h option: ALWAYS_CHROOT.
 .SH "CGI"
 .PP
 @software@ supports the CGI 1.1 spec.
@@ -299,7 +250,7 @@ the current working directory when a CGI program gets run is
 the directory that the CGI program lives in.
 This isn't in the CGI 1.1 spec, but it's what most other HTTP servers do.
 .PP
-Relevant config.h options: CGI_LIMIT, CGI_PATTERN, CGI_TIMELIMIT, CGI_NICE, CGI_PATH, CGI_LD_LIBRARY_PATH, CGIBINDIR.
+Relevant config.h options: CGI_LIMIT, CGI_PATTERN, CGI_TIMELIMIT, CGI_NICE, CGI_PATH, CGI_LD_LIBRARY_PATH.
 .SH "OpenPGP"
 .PP
 @software@ support signed response as defined in
@@ -310,8 +261,8 @@ type in its "Accept:" request header.
 .PP
 Using the -s flag on the command line or "sigpat=..." in the configuration
 file, you may specifie ressources which should NOT answer to such request,
-which may save a lot of CPU if signature cache is not used (CGI), or
-disk space if you serve a bunch of little files.
+which may save a lot of CPU if signature cache is not used (ie when signing CGI, proxy and HKP responses),
+or disk space if you serve a bunch of little files.
 .PP
 It use the same, simple shell-style pattern, that cgipat (see above).
 Relevant config.h options are SIG_EXCLUDE_PATTERN and SIG_CACHEDIR.
@@ -322,7 +273,7 @@ config.h and recompile, or specify "/**" with -s flag or "sigpat=...".
 .IR Note:
 Unlike CGI checking which follow first symlink destination (see below),
 signature exclusion pattern is check on the asked filename in the URL, thus permit
-to restrict also signing done by embedded actions (like "pks/lookup").
+to restrict also signing done when @software@ is used as a proxy and for embedded actions (like "pks/lookup").
 .SH "BASIC AUTHENTICATION"
 .PP
 Basic Authentication is available as an option at compile time.
@@ -487,9 +438,6 @@ immediately, instead of waiting for the regular hourly update.
 This signal tells @software@ to close and re-open its (non-syslog) log file,
 for instance if you rotated the logs and want it to start using the
 new one.
-This is a little tricky to set up correctly, for instance if you are using
-chroot() then the log file must be within the chroot tree, but it's
-definitely doable.
 .SH FILES
 From its running directory:
 .B @software@.conf gpgme/gpg.conf
@@ -503,10 +451,10 @@ Geoff Adams, Dan Kegel, John Hascall, Bennett Todd, KIKUCHI Takahiro,
 Catalin Ionescu, and Craig Leres (for not complaining about coding style very much).
 .PP
 And many thanks to people in or around OpenUDC adventure : Stephane Laborde (Galuel),
-Emmanuel Charpentier (echarp), Caner Candan, Michele Bini (Rev22), ... (sorry for the
-forgotten ones :-] ) 
+Emmanuel Charpentier (echarp), Caner Candan, Michele Bini (Rev22), Cedric Moreau (cgeek),
+pierro, ... (sorry for the forgotten ones :-] ) 
 .SH AUTHOR
-Copyright \[co] 2012 by Jean-Jacques Brucker <open-udc@googlegroups.com>.
+Copyright \[co] 2012-2014 by Jean-Jacques Brucker <open-udc@googlegroups.com>.
 .nf
 Copyright \[co] 1995,1998,1999,2000 by Jef Poskanzer <jef@mail.acme.com>.
 All rights reserved.

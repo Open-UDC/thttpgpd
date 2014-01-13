@@ -69,7 +69,7 @@ typedef struct {
 	FILE* logfp;
 	} httpd_server;
 
-#define HS_NO_SYMLINK_CHECK (1<<1)
+//#define HS_NO_SYMLINK_CHECK (1<<1)
 #define HS_NO_LOG (1<<2)
 #define HS_PKS_ADD_MERGE_ONLY (1<<3)
 #define HS_VIRTUAL_HOST (1<<4)

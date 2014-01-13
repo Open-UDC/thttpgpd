@@ -89,13 +89,7 @@ typedef long long int64_t;
 char* argv0;
 static int debug = 0;
 static char* dir = (char*) 0;
-#ifdef ALWAYS_CHROOT
-static int do_chroot = 1;
-static int hsbfield = ( HS_NO_SYMLINK_CHECK | HS_PKS_ADD_MERGE_ONLY );
-#else /* ALWAYS_CHROOT */
-static int do_chroot = 0;
 static int hsbfield = HS_PKS_ADD_MERGE_ONLY;
-#endif /* ALWAYS_CHROOT */
 static int cgi_limit = CGI_LIMIT;
 #ifdef CGI_PATTERN
 static char * cgi_pattern = CGI_PATTERN;
@@ -661,37 +655,6 @@ main( int argc, char** argv )
 		}
 	}
 
-	/* Chroot if requested. */
-	if ( do_chroot ) {
-		if ( chroot( cwd ) < 0 )
-			DIE(1, "chroot - %m" );
-		/* If we're logging and the logfile's pathname begins with the
-		** chroot tree's pathname, then elide the chroot pathname so
-		** that the logfile pathname still works from inside the chroot
-		** tree.
-		*/
-		if ( logfile != (char*) 0 && strcmp( logfile, "-" ) != 0 )
-			{
-			if ( strncmp( logfile, cwd, strlen( cwd ) ) == 0 )
-				{
-				(void) strcpy( logfile, &logfile[strlen( cwd ) - 1] );
-				/* (We already guaranteed that cwd ends with a slash, so leaving
-				** that slash in logfile makes it an absolute pathname within
-				** the chroot tree.)
-				*/
-				}
-			else
-				{
-				syslog( LOG_WARNING, "logfile is not within the chroot tree, you will not be able to re-open it" );
-				warnx("logfile is not within the chroot tree, you will not be able to re-open it.");
-				}
-			}
-		(void) strcpy( cwd, "/" );
-		/* Always chdir to / after a chroot. */
-		if ( chdir( cwd ) < 0 )
-			DIE(1, "chroot chdir - %m" );
-	}
-
 	/* Switch to the web (public) directory. */
 	if ( chdir(WEB_DIR) < 0 )
 		DIE(1,"chdir %s - %m %s",WEB_DIR,"(forget "SOFTWARE_NAME"_init.sh ?)");
@@ -765,8 +728,7 @@ main( int argc, char** argv )
 	stats_simultaneous = 0;
 
 	/* If we're root, try to become someone else. */
-	if ( getuid() == 0 )
-		{
+	if ( getuid() == 0 ) {
 		/* Set aux groups to null. */
 		if ( setgroups( 0, (const gid_t*) 0 ) < 0 )
 			DIE(1,"setgroups - %m");
@@ -784,13 +746,7 @@ main( int argc, char** argv )
 		/* Setenv(HOME) (for gpgme) . */
 		if ( setenv("HOME",pwd->pw_dir,1) < 0 )
 			DIE(1, "setenv - %m" );
-
-		/* Check for unnecessary security exposure. */
-		if ( ! do_chroot )
-			syslog(
-				LOG_WARNING,
-				"started as root without requesting chroot(), warning only" );
-		}
+	}
 
 #ifdef CHECK_UDID2
 	if (regcomp(&udid2c_regex, "^udid2;c;[A-Z]{1,20};[A-Z-]{1,20};[0-9-]{10};[0-9.e+-]{14};[0-9]+", REG_EXTENDED|REG_NOSUB))
@@ -1080,16 +1036,6 @@ parse_args( int argc, char** argv )
 			++argn;
 			dir = argv[argn];
 			}
-		else if ( strcmp( argv[argn], "-r" ) == 0 )
-			{
-			do_chroot = 1;
-			hsbfield |= HS_NO_SYMLINK_CHECK;
-			}
-		else if ( strcmp( argv[argn], "-nor" ) == 0 )
-			{
-			do_chroot = 0;
-			hsbfield &= ~HS_NO_SYMLINK_CHECK;
-			}
 		else if ( strcmp( argv[argn], "-L" ) == 0 && argn + 1 < argc )
 			{
 			++argn;
@@ -1187,7 +1133,6 @@ usage( void )
 #ifdef VHOSTING
 			    "	-vh         enable virtual hosting\n"
 #endif /* VHOSTING */
-			    "	-r|-nor     enable/disable chroot - default: disable to make all cgi works\n"
 #if DEFAULT_CONNLIMIT > 0
 			    "	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: %d\n"
 #else /* DEFAULT_CONNLIMIT > 0 */
@@ -1276,18 +1221,6 @@ static int read_config( char* filename )
 				{
 				value_required( name, value );
 				dir = e_strdup( value );
-				}
-			else if ( strcasecmp( name, "chroot" ) == 0 )
-				{
-				no_value_required( name, value );
-				do_chroot = 1;
-				hsbfield |= HS_NO_SYMLINK_CHECK;
-				}
-			else if ( strcasecmp( name, "nochroot" ) == 0 )
-				{
-				no_value_required( name, value );
-				do_chroot = 0;
-				hsbfield &= ~HS_NO_SYMLINK_CHECK;
 				}
 			else if ( strcasecmp( name, "connlimit" ) == 0 )
 				{
