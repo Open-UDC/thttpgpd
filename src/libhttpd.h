@@ -106,6 +106,7 @@ typedef struct {
 	char* hdrhost;
 	char* hostdir;
 	char* authorization;
+	char* forwardedfor;
 	char* remoteuser;
 	char* response;
 	char* tmpbuff; /* used to prepare string as parsing and starting request is now multithread, it replace some previous static buff */

@@ -1441,6 +1441,7 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 	hc->hdrhost = "";
 	hc->hostdir[0] = '\0';
 	hc->authorization = "";
+	hc->forwardedfor = "";
 	hc->remoteuser[0] = '\0';
 	hc->response[0] = '\0';
 	hc->responselen = 0;
@@ -1905,6 +1906,12 @@ httpd_parse_request( httpd_conn* hc )
 				cp += strspn( cp, " \t" );
 				if ( strcasecmp( cp, "keep-alive" ) == 0 )
 					hc->bfield |= HC_KEEP_ALIVE;
+				}
+			else if ( strncasecmp( buf, "X-Forwarded-For:", 16 ) == 0 )
+				{
+				cp = &buf[16];
+				cp += strspn( cp, " \t" );
+				hc->forwardedfor=cp;
 				}
 #ifdef LOG_UNKNOWN_HEADERS
 			else if ( strncasecmp( buf, "Accept-Charset:", 15 ) == 0 ||
@@ -2796,6 +2803,8 @@ make_envp( httpd_conn* hc )
 	if ( hc->authorization[0] != '\0' )
 		envp[envn++] = build_env( "AUTH_TYPE=%s", "Basic" );
 		/* We only support Basic auth at the moment. */
+	if ( hc->forwardedfor[0] != '\0' )
+		envp[envn++] = build_env( "HTTP_X_FORWARDED_FOR=%s", hc->forwardedfor );
 	if ( getenv( "TZ" ) != (char*) 0 )
 		envp[envn++] = build_env( "TZ=%s", getenv( "TZ" ) );
 	envp[envn++] = build_env( "CGI_PATTERN=%s", hc->hs->cgi_pattern );
@@ -3863,6 +3872,8 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 
 static void make_log_entry(const httpd_conn* hc, time_t now, int status) {
 	char* ru;
+	char* rfc1413;
+
 	char url[305];
 	char bytes[40];
 
@@ -3880,6 +3891,24 @@ static void make_log_entry(const httpd_conn* hc, time_t now, int status) {
 		ru = hc->remoteuser;
 	else
 		ru = "-";
+
+	/* Format user-identifier,
+	 * in fact we use the unused second field (rfc1413) to display
+	 * first entry in the X-Forwarded-For header given by the client.
+	 * Thus permit to log both real-IP client and the one given unsecurly by this header.*/
+	if ( hc->forwardedfor[0] != '\0' ) {
+		rfc1413 = hc->forwardedfor;
+		rfc1413 += strcspn( hc->forwardedfor, " \t," );
+		/* here we cut eventual intermediate proxy given by this header fields,
+		 * but WARNING: we don't fix it after displaying log
+		 * (because we are suppose to make_log_entry() at the end of request handle) */
+		*rfc1413='\0';
+		rfc1413 = hc->forwardedfor;
+	}
+	if ( hc->forwardedfor[0] == '\0' )
+		/* retest in case client forge an "X-Forwarded-For: ," header */
+		rfc1413 = "-";
+
 	/* Format the url. */
 	(void) snprintf( url, sizeof(url),"%.200s", hc->encodedurl );
 	/* Format the bytes. */
@@ -3922,8 +3951,8 @@ static void make_log_entry(const httpd_conn* hc, time_t now, int status) {
 			"%s %c%04d", date_nozone, sign, zone );
 		/* And write the log entry. */
 		(void) fprintf( hc->hs->logfp,
-			"%.80s - %.80s [%s] \"%.80s %.80s%.300s %.80s\" %d %s \"%.200s\" \"%.200s\"\n",
-			hc->client_addr, ru, date, httpd_method_str( hc->method ),
+			"%.80s %.80s %.80s [%s] \"%.80s %.80s%.300s %.80s\" %d %s \"%.200s\" \"%.200s\"\n",
+			hc->client_addr, rfc1413, ru, date, httpd_method_str( hc->method ),
 			hc->hostdir, url, hc->protocol,
 			status, bytes, hc->referer, hc->useragent );
 #ifdef FLUSH_LOG_EVERY_TIME
@@ -3931,8 +3960,8 @@ static void make_log_entry(const httpd_conn* hc, time_t now, int status) {
 #endif
 	} else
 		syslog( LOG_INFO,
-			"%.80s - %.80s \"%.80s %.80s%.200s %.80s\" %d %s \"%.200s\" \"%.200s\"",
-			hc->client_addr, ru, httpd_method_str( hc->method ),
+			"%.80s %.80s %.80s \"%.80s %.80s%.200s %.80s\" %d %s \"%.200s\" \"%.200s\"",
+			hc->client_addr, rfc1413, ru, httpd_method_str( hc->method ),
 			hc->hostdir, url, hc->protocol,
 			status, bytes, hc->referer, hc->useragent );
 
