@@ -914,8 +914,8 @@ auth_check( httpd_conn* hc)
 
 	/* Is it the authorization file ? */
 	if ( !S_ISDIR(hc->sb.st_mode) && 
-			(strcmp( hc->realfilename, AUTH_FILE ) == 0 /* for the root directory */
-			|| strcmp(hc->realfilename, authpath) ) )
+			(!strcmp( hc->realfilename, AUTH_FILE ) /* for the root directory */
+			|| !strcmp(hc->realfilename, authpath) ) )
 		{
 		syslog(
 			LOG_NOTICE,
