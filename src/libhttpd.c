@@ -140,7 +140,7 @@ static void send_authenticate( httpd_conn* hc, char* realm );
 static int b64_decode( const char* str, unsigned char* space, int size );
 static int auth_check( httpd_conn* hc, char* dirname  );
 #endif /* AUTH_FILE */
-static void send_dirredirect( httpd_conn* hc );
+static void send_dirredirect( httpd_conn* hc ); /* NOT thread safe */
 static int hexit( char c );
 #ifdef GENERATE_INDEXES
 static void strencode( char* to, int tosize, char* from );
@@ -1959,8 +1959,6 @@ httpd_parse_request( httpd_conn* hc )
 	if ( hc->hs->bfield & HS_VIRTUAL_HOST ) {
 		char * hostdir;
 		struct stat sb;
-		static char * tempfilename;
-		static size_t maxtempfilename = 0;
 		int len, lenh;
 
 		hostdir= hc->reqhost[0] != '\0' ? hc->reqhost : hc->hdrhost ;
@@ -1985,13 +1983,13 @@ httpd_parse_request( httpd_conn* hc )
 
 				/* Prepend hostdir to the filename. */
 				len=strlen(hc->expnfilename);
-				httpd_realloc_str( &tempfilename, &maxtempfilename, len );
-				(void) strcpy( tempfilename, hc->expnfilename );
+				httpd_realloc_str( &hc->tmpbuff, &hc->maxtmpbuff, len );
+				(void) strcpy( hc->tmpbuff, hc->expnfilename );
 
 				httpd_realloc_str( &hc->expnfilename, &hc->maxexpnfilename, lenh + 1 + len );
 				(void) strcpy( hc->expnfilename, hostdir );
 				hc->expnfilename[lenh]='/';
-				(void) strcpy( &hc->expnfilename[lenh+1], tempfilename );
+				(void) strcpy( &hc->expnfilename[lenh+1], hc->tmpbuff );
 
 			} else if ( errno != ENOENT )
 				syslog( LOG_ERR, "vhost stat %.80s - %m", hostdir );
@@ -3192,7 +3190,7 @@ void httpd_parse_resp(interpose_args_t * args) {
 	gpgme_data_release(gpgsig); \
 	free(bound); \
 	}
-		char * bound=random_boundary(8);
+		char * bound=random_boundary(NULL,BOUNDARYLEN-1);
 		gpgme_error_t gpgerr;
 		gpgme_data_t gpgdata,gpgsig;
 		struct gpgme_data_cbs gpgcbs = {
@@ -3570,18 +3568,21 @@ cgi( httpd_conn* hc )
  * \return a negative number to finish the connection, or 0 if success.
  */
 int
-httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
+httpd_start_request( connecttab * c) {
 	static char* indexname;
 	static size_t maxindexname = 0;
+	static pthread_mutex_t inmutex = PTHREAD_MUTEX_INITIALIZER;
 	static const char* index_names[] = { INDEX_NAMES };
 	int i;
 #ifdef AUTH_FILE
 	static char* dirname;
 	static size_t maxdirname = 0;
+	static pthread_mutex_t dnmutex = PTHREAD_MUTEX_INITIALIZER;
 #endif /* AUTH_FILE */
 	size_t expnlen, indxlen;
 	char* cp;
 	char* pi;
+	httpd_conn* hc=c->hc;
 
 	expnlen = strlen( hc->expnfilename );
 
@@ -3674,6 +3675,8 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 			return -1;
 			}
 
+		pthread_mutex_lock(&inmutex);
+		pthread_cleanup_push(pthread_mutex_unlock,&inmutex);
 		/* Check for an index file. */
 		for ( i = 0; i < SIZEOFARRAY(index_names); ++i )
 			{
@@ -3687,9 +3690,21 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 			if ( strcmp( indexname, "./" ) == 0 )
 				indexname[0] = '\0';
 			(void) strcat( indexname, index_names[i] );
-			if ( stat( indexname, &hc->sb ) >= 0 )
+			if ( stat( indexname, &hc->sb ) >= 0 ) {
+				/* Expand symlinks again.  More pathinfo means something went wrong. */
+				cp = expand_symlinks( indexname, &pi, (hc->hs->bfield & HS_NO_SYMLINK_CHECK));
+				if ( cp == (char*) 0 || pi[0] != '\0' )
+					{
+					httpd_send_err( hc, 500, err500title, "", err500form, hc->encodedurl );
+					return -1;
+					}
+				expnlen = strlen( cp );
+				httpd_realloc_str( &hc->expnfilename, &hc->maxexpnfilename, expnlen );
+				(void) strcpy( hc->expnfilename, cp );
 				goto got_one;
+				}
 			}
+		pthread_cleanup_pop(1);
 
 		/* Nope, no index file, so it's an actual directory request. */
 #ifdef GENERATE_INDEXES
@@ -3707,9 +3722,12 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 			return -1;
 			}
 #ifdef AUTH_FILE
+		pthread_mutex_lock(&dnmutex);
+		pthread_cleanup_push(pthread_mutex_unlock,&dnmutex);
 		/* Check authorization for this directory. */
 		if ( auth_check( hc, hc->expnfilename ) == -1 )
 			return -1;
+		pthread_cleanup_pop(1);
 #endif /* AUTH_FILE */
 
 		/* Ok, generate an index. */
@@ -3726,19 +3744,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 #endif /* GENERATE_INDEXES */
 
 		got_one: ;
-		/* Got an index file.  Expand symlinks again.  More pathinfo means
-		** something went wrong.
-		*/
-		cp = expand_symlinks( indexname, &pi, (hc->hs->bfield & HS_NO_SYMLINK_CHECK));
-		if ( cp == (char*) 0 || pi[0] != '\0' )
-			{
-			httpd_send_err( hc, 500, err500title, "", err500form, hc->encodedurl );
-			return -1;
-			}
-		expnlen = strlen( cp );
-		httpd_realloc_str( &hc->expnfilename, &hc->maxexpnfilename, expnlen );
-		(void) strcpy( hc->expnfilename, cp );
-
+		/* Got an index file. */ 
 		/* Now, is the index version world-readable or world-executable? */
 		if ( ! ( hc->sb.st_mode & ( S_IROTH | S_IXOTH ) ) )
 			{
@@ -3768,6 +3774,9 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 		}
 
 #ifdef AUTH_FILE
+
+	pthread_mutex_lock(&dnmutex);
+	pthread_cleanup_push(pthread_mutex_unlock,&dnmutex);
 	/* Check authorization for this directory. */
 	httpd_realloc_str( &dirname, &maxdirname, expnlen );
 	(void) strcpy( dirname, hc->expnfilename );
@@ -3778,6 +3787,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 		*cp = '\0';
 	if ( auth_check( hc, dirname ) == -1 )
 		return -1;
+	pthread_cleanup_pop(1);
 
 	/* Check if the filename is the AUTH_FILE itself - that's verboten. */
 	/* WARNING: If AUTH_FILE doesn't expand to something hidden (those with a path element begining with '.')
@@ -3874,6 +3884,32 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 			hc->sb.st_mtime );
 		}
 	else {
+	/* Fill in end_byte_index. */
+	if ( hc->bfield & HC_GOT_RANGE )
+		{
+		c->next_byte_index = hc->first_byte_index;
+		c->end_byte_index = hc->last_byte_index + 1;
+		}
+	else if ( hc->bytes_to_send < 0 )
+		c->end_byte_index = 0;
+	else
+		c->end_byte_index = hc->bytes_to_send;
+
+	if ( c->next_byte_index >= c->end_byte_index )
+		{
+		/* There's nothing to send. */
+		finish_connection( c, tvP );
+		return;
+		}
+
+	/* Cool, we have a valid connection and a file to send to it. */
+	c->conn_state = CNST_SENDING;
+	c->started_at = tvP->tv_sec;
+	c->wouldblock_delay = 0;
+
+	fdwatch_add_fd( hc->conn_fd, c, FDW_WRITE );
+
+
 		hc->file_address = mmc_map( hc->expnfilename, &(hc->sb), nowP );
 		if ( hc->file_address == (char*) 0 ) {
 			httpd_send_err( hc, 500, err500title, "", err500form, hc->encodedurl );
@@ -4151,25 +4187,39 @@ httpd_logstats( long secs )
 			(float) str_alloc_size / str_alloc_count );
 	}
 
-/* Allocate and generate a random string of size len from charset [G-Vg-v] */
-char *random_boundary(unsigned short len) {
+/* Generate a random string of size len from charset [G-Vg-v]
+ * If buff is NULL a new string is allocated,
+ * else len + 1 terminating null byte ('\0') will be wrinting into buff
+ *\return a boundary string, or NULL if malloc failed.
+ */
+char *random_boundary(char * buff, unsigned short len) {
 
-    char *p,*q;
+    char *q;
 	static int srand_called=0;
 
-	if ( !(p=malloc(len+1)) )
-		return p;
-	p[len]='\0';
+	if (!buff && !(buff=malloc(len+1)) )
+			return NULL;
+
+	buff[len]='\0';
 
 	/* call srand exactly one time to save bit cpu */
 	if(!srand_called) {
 		srandom(time((time_t *)0));
 		srand_called=1;
 	}
-	for(q=p; len; len--, q++) {
+	for(q=buff; len; len--, q++) {
 		*q=(char) (rand()%2?rand()%16+103:rand()%16+71) ;
-		//*q=(char) (rand()%2?(rand()+(unsigned int)p)%16+103:rand()%16+71) ;
+		//*q=(char) (rand()%2?(rand()+(unsigned int)buff)%16+103:rand()%16+71) ;
 	}
-	return p;
+	return buff;
+}
+
+/* Call this to close down a connection and clear its connecttab.
+ * You have to call this function if you handle the connection in
+ * a thread.
+*/
+extern void really_clear_connection( connecttab* c, struct timeval* tvP );
+void httpd_clear_connection( connecttab* c ) {
+	really_clear_connection(c,NULL);
 }
 

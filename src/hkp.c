@@ -365,7 +365,7 @@ void hkp_lookup( httpd_conn* hc ) {
 
 		terrno=pthread_create(&tparse, NULL,(void * (*)(void *)) &httpd_parse_resp, &args);
 		if ( terrno !=0 ) {
-			errno=terrno;
+			errno=terrno; /* we can do this only in ths case: failing first call to pthread_create */
 			httpd_send_err( hc, 500, err500title, "", err500form, "c" );
 			exit(EXIT_FAILURE);
 		}

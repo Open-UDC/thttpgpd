@@ -129,21 +129,6 @@ static int numthrottles, maxthrottles;
 
 #define THROTTLE_NOLIMIT -1
 
-typedef struct {
-	int conn_state;
-	int next_free_connect;
-	httpd_conn* hc;
-	int tnums[MAXTHROTTLENUMS];		 /* throttle indexes */
-	int numtnums;
-	long max_limit, min_limit;
-	time_t started_at, active_at;
-	Timer* wakeup_timer;
-	Timer* linger_timer;
-	long wouldblock_delay;
-	off_t bytes;
-	off_t end_byte_index;
-	off_t next_byte_index;
-	} connecttab;
 static connecttab* connects;
 static int num_connects, max_connects, first_free_connect;
 static int httpd_conn_count;
@@ -154,6 +139,7 @@ static int httpd_conn_count;
 #define CNST_SENDING 2
 #define CNST_PAUSING 3
 #define CNST_LINGERING 4
+#define CNST_THREADING 5
 
 static httpd_server* hs = (httpd_server*) 0;
 int terminate = 0;
@@ -198,11 +184,11 @@ static void handle_read( connecttab* c, struct timeval* tvP );
 static void handle_send( connecttab* c, struct timeval* tvP );
 static void handle_linger( connecttab* c, struct timeval* tvP );
 static int check_throttles( connecttab* c );
-static void clear_throttles( connecttab* c, struct timeval* tvP );
+static void clear_throttles( connecttab* c);
 static void update_throttles( ClientData client_data, struct timeval* nowP );
 static void finish_connection( connecttab* c, struct timeval* tvP );
 static void clear_connection( connecttab* c, struct timeval* tvP );
-static void really_clear_connection( connecttab* c, struct timeval* tvP );
+void really_clear_connection( connecttab* c, struct timeval* tvP );
 static void idle( ClientData client_data, struct timeval* nowP );
 static void wakeup_connection( ClientData client_data, struct timeval* nowP );
 static void linger_clear_connection( ClientData client_data, struct timeval* nowP );
@@ -1188,11 +1174,11 @@ usage( void )
 			    "	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: no limit\n"
 #endif /* DEFAULT_CONNLIMIT > 0 */
 #ifdef CGI_PATTERN
-			    "	-c CGIPAT   pattern for CGI programs - default: "CGI_PATTERN"\n"
+			    "	-c CGIPAT   pattern for CGI programs - default: \""CGI_PATTERN"\"\n"
 			    "	-F SOCKET   Remote or \"unix:\" socket to pass fastcgi - default: fastcgi disabled\n"
 #endif /* CGI_PATTERN */
 #ifdef SIG_EXCLUDE_PATTERN
-			    "	-s SIG!PAT  pattern disabling signed responses - default: "SIG_EXCLUDE_PATTERN"\n"
+			    "	-s SIG!PAT  pattern disabling signed responses - default: \""SIG_EXCLUDE_PATTERN"\"\n"
 #endif /* SIG_EXCLUDE_PATTERN */
 			    "	-t FILE     file of throttle settings - default: no throtlling\n"
 			    "	-l LOGFILE  file for logging - default: via syslog()\n"
@@ -1716,50 +1702,41 @@ handle_read( connecttab* c, struct timeval* tvP )
 		}
 
 	/* Start the connection going. */
-	if ( httpd_start_request( hc, tvP ) < 0 )
-		{
-		/* Something went wrong.  Close down the connection. */
-		finish_connection( c, tvP );
-		return;
-		}
+	{
+		pthread_t tid;
+		int s;
+		sigset_t setm, sett;
 
-	/* Fill in end_byte_index. */
-	if ( hc->bfield & HC_GOT_RANGE )
-		{
-		c->next_byte_index = hc->first_byte_index;
-		c->end_byte_index = hc->last_byte_index + 1;
-		}
-	else if ( hc->bytes_to_send < 0 )
-		c->end_byte_index = 0;
-	else
-		c->end_byte_index = hc->bytes_to_send;
+		c->conn_state = CNST_THREADING;
+		c->started_at = tvP->tv_sec;
+		fdwatch_del_fd( hc->conn_fd );
 
-	/* Check if it's already handled. */
-	if ( hc->file_address == (char*) 0 )
-		{
-		/* No file address means someone else (a child process) is handling it. */
-		int tind;
-		for ( tind = 0; tind < c->numtnums; ++tind )
-			throttles[c->tnums[tind]].bytes_since_avg += hc->bytes_sent;
-		c->next_byte_index = hc->bytes_sent;
-		finish_connection( c, tvP );
-		return;
-		}
-	if ( c->next_byte_index >= c->end_byte_index )
-		{
-		/* There's nothing to send. */
-		finish_connection( c, tvP );
-		return;
-		}
+		/* set a default value for hc->bytes_sent */
+		//hc->bytes_sent = CGI_BYTECOUNT;
+		hc->bfield &= ~HC_SHOULD_LINGER;
 
-	/* Cool, we have a valid connection and a file to send to it. */
-	c->conn_state = CNST_SENDING;
-	c->started_at = tvP->tv_sec;
-	c->wouldblock_delay = 0;
-	//client_data.p = c;
+		/* there are now no cgi_limit or CGI_TIMELIMIT management because it is to complicated
+		 * to manage their mutex and using cgi_pthread_cleanup_push or pthread_cancel.
+		 * To manage at least CGI_TIMELIMIT is a TODO. */
 
-	fdwatch_del_fd( hc->conn_fd );
-	fdwatch_add_fd( hc->conn_fd, c, FDW_WRITE );
+		sigfillset(&sett);
+		s = pthread_sigmask(SIG_SETMASK, &sett, &setm);
+		if ( s !=0 ) {
+			syslog( LOG_CRIT, "SIG_SETMASK %s", strerror(s) );
+			exit( 1 );
+		}
+		s=pthread_create(&tid, NULL,/*(void * (*)(void *))*/httpd_start_request, c);
+		if ( s !=0 ) {
+			/* TODO: use strerror(s) or strerror_r */
+			httpd_send_err( hc, 500, err500title, "", err500form, "thc" );
+			finish_connection( c, tvP );
+		}
+		s = pthread_sigmask(SIG_SETMASK, &setm, NULL);
+		if ( s !=0 ) {
+			syslog( LOG_CRIT, "SIG_SETMASK %s", strerror(s) );
+			exit( 1 );
+		}
+	}
 	}
 
 
@@ -1979,7 +1956,7 @@ check_throttles( connecttab* c )
 
 
 static void
-clear_throttles( connecttab* c, struct timeval* tvP )
+clear_throttles( connecttab* c )
 	{
 	int tind;
 
@@ -2102,15 +2079,29 @@ clear_connection( connecttab* c, struct timeval* tvP )
 		really_clear_connection( c, tvP );
 	}
 
-
-static void
+/* NOTE: there is a mutex in this function, so to avoid deadlock with pthread_cancel, this function should be
+ * call in a pthread cleanup handler */ 
+void
 really_clear_connection( connecttab* c, struct timeval* tvP )
 	{
+	int tind;
+	static pthread_mutex_t ccmutex = PTHREAD_MUTEX_INITIALIZER;
+
+	if ( c->hc->file_address == (char*) 0 && hc->bytes_sent <= 0 )
+		/* No file address means someone else (a child or a thread process) has handling it.
+		 * if  hc->bytes_sent seems not updated, set it to CGI_BYTECOUNT */
+		 hc->bytes_sent = CGI_BYTECOUNT;
+
+	pthread_mutex_lock(&ccmutex);
+
+	for ( tind = 0; tind < c->numtnums; ++tind )
+		throttles[c->tnums[tind]].bytes_since_avg += hc->bytes_sent;
+
 	stats_bytes += c->hc->bytes_sent;
-	if ( c->conn_state != CNST_PAUSING )
+	if ( c->conn_state != CNST_PAUSING &&  c->conn_state != CNST_THREADING )
 		fdwatch_del_fd( c->hc->conn_fd );
 	httpd_close_conn( c->hc, tvP );
-	clear_throttles( c, tvP );
+	clear_throttles( c);
 	if ( c->linger_timer != (Timer*) 0 )
 		{
 		tmr_cancel( c->linger_timer );
@@ -2120,6 +2111,8 @@ really_clear_connection( connecttab* c, struct timeval* tvP )
 	c->next_free_connect = first_free_connect;
 	first_free_connect = c - connects;		/* division by sizeof is implied */
 	--num_connects;
+
+	pthread_mutex_unlock(&ccmutex);
 	}
 
 

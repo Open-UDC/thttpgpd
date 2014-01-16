@@ -38,6 +38,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include "timers.h"
 
 /* A few convenient defines. */
 
@@ -74,6 +75,7 @@ typedef struct {
 #define HS_PKS_ADD_MERGE_ONLY (1<<3)
 #define HS_VIRTUAL_HOST (1<<4)
 
+#define BOUNDARYLEN 9
 /* A connection. */
 typedef struct {
 	int initialized;
@@ -108,9 +110,10 @@ typedef struct {
 	char* authorization;
 	char* remoteuser;
 	char* response;
+	char* tmpbuff; /* used to prepare string as parsing and starting request is now multithread, it replace some previous static buff */
 	size_t maxdecodedurl, maxorigfilename, maxexpnfilename, maxencodings,
 		maxpathinfo, maxquery, maxaccept, maxaccepte, maxreqhost, maxhostdir,
-		maxremoteuser, maxresponse;
+		maxremoteuser, maxresponse, maxtmpbuff;
 	size_t responselen;
 	time_t if_modified_since, range_if;
 	ssize_t contentlength; /* maybe use off_t to be able to make bigger POST on 32-bits archs ? */
@@ -122,7 +125,26 @@ typedef struct {
 	struct stat sb;
 	int conn_fd;
 	char* file_address;
+	char boundary[BOUNDARYLEN+1]
 	} httpd_conn;
+
+/* a element managing a connection */
+typedef struct {
+	int conn_state;
+	int next_free_connect;
+	httpd_conn* hc;
+	int tnums[MAXTHROTTLENUMS];		 /* throttle indexes */
+	int numtnums;
+	long max_limit, min_limit;
+	time_t started_at, active_at;
+	Timer* wakeup_timer;
+	Timer* linger_timer;
+	long wouldblock_delay;
+	off_t bytes;
+	off_t end_byte_index;
+	off_t next_byte_index;
+	} connecttab;
+
 
 #define HC_GOT_RANGE (1<<1)  /* if match "d-d" or "d-" , which is only supported (except when asked multipart/msigned on a local file) */
 #define HC_KEEP_ALIVE (1<<2)
@@ -172,6 +194,12 @@ extern hctab_t hctab;
 #define CHST_CRLF 9
 #define CHST_CRLFCR 10
 #define CHST_BOGUS 11
+
+/* Call this to close down a connection and clear its connecttab.
+ * You have to call this function if you handle the connection in
+ * a thread.
+*/
+void httpd_clear_connection( connecttab* c );
 
 /* Copies and decodes a string.  It's ok for from and to to be the
 ** same string. Return the lenght of decoded string.
