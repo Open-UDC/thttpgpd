@@ -80,6 +80,7 @@ mid	audio/midi
 midi	audio/midi
 mif	application/vnd.mif
 mime	message/rfc822
+mkv	video/x-matroska
 mml	application/mathml+xml
 mov	video/quicktime
 movie	video/x-sgi-movie
