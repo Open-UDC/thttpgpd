@@ -546,30 +546,11 @@ send_mime( httpd_conn* hc, int status, char* title, char* encodings, char* extra
 	char modbuf[100];
 	char fixed_type[500];
 	char buf[1000];
-	int partial_content;
-
 
 	hc->status = status;
 	hc->bytes_to_send = length;
 	if ( hc->http_version > 9 )
 		{
-		if ( status == 200 && (hc->bfield & HC_GOT_RANGE) &&
-			 ( hc->last_byte_index >= hc->first_byte_index ) &&
-			 ( ( hc->last_byte_index != length - 1 ) ||
-			   ( hc->first_byte_index > 0 ) ) &&
-			 ( hc->range_if == (time_t) -1 ||
-			   hc->range_if == hc->sb.st_mtime ) )
-			{
-			partial_content = 1;
-			hc->status = status = 206;
-			title = ok206title;
-			}
-		else
-			{
-			partial_content = 0;
-			hc->bfield &= ~HC_GOT_RANGE;
-			}
-
 		now = time( (time_t*) 0 );
 
 		if ( mod == (time_t) 0 )
@@ -595,7 +576,7 @@ send_mime( httpd_conn* hc, int status, char* title, char* encodings, char* extra
 				"Content-Encoding: %s\015\012", encodings );
 			add_response( hc, buf );
 			}
-		if ( partial_content )
+		if ( status == 206 )
 			{
 			(void) snprintf( buf, sizeof(buf),
 				"Content-Range: bytes %lld-%lld/%lld\015\012%s %lld\015\012",
@@ -711,6 +692,11 @@ httpd_send_err( httpd_conn* hc, int status, char* title, char* extraheads, const
 	send_mime(
 		hc, status, title, "", extraheads, "text/html; charset=%s", (off_t) -1,
 		(time_t) 0 );
+	if ( hc->method == METHOD_HEAD ) {
+		httpd_write_response( hc );
+		return;
+	}
+
 	(void) snprintf( buf, sizeof(buf), "\
 <HTML>\n\
 <HEAD><TITLE>%d %s</TITLE></HEAD>\n\
@@ -2457,12 +2443,7 @@ static void child_r_start(httpd_conn* hc) {
 static int launch_process(void (*funct) (httpd_conn* ), httpd_conn* hc, int methods, char * fname) {
 	int r;
 
-	if ( hc->method == METHOD_HEAD ) {
-		send_mime(
-			hc, 200, ok200title, "", "", "text/html; charset=%s", (off_t) -1,
-			hc->sb.st_mtime );
-		return(-1);
-	} else if ( ! (hc->method & methods) ) {
+	if ( ! (hc->method & methods) ) {
 		httpd_send_err( hc, 501, err501title, "", err501form, httpd_method_str( hc->method ) );
 		return(-1);
 	}
@@ -2534,6 +2515,9 @@ static void ls(httpd_conn* hc) {
 		hc, 200, ok200title, "", "", "text/html; charset=%s",
 		(off_t) -1, hc->sb.st_mtime );
 	httpd_write_response( hc );
+
+	if ( hc->method == METHOD_HEAD )
+		exit(0);
 
 	/* Open a stdio stream so that we can use fprintf, which is more
 	** efficient than a bunch of separate write()s.  We don't have
@@ -3703,7 +3687,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 			}
 
 		/* Ok, generate an index. */
-		return launch_process(ls, hc, METHOD_GET, "indexing");
+		return launch_process(ls, hc, METHOD_HEAD | METHOD_GET, "indexing");
 #else /* GENERATE_INDEXES */
 		syslog(
 			LOG_INFO, "%.80s URL \"%.80s\" tried to index a directory",
@@ -3808,12 +3792,20 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 
 	figure_mime( hc );
 
-	if ( hc->method == METHOD_HEAD )
+	if ( hc->method == METHOD_HEAD ) {
+		if ( (hc->bfield & HC_GOT_RANGE) &&
+			 ( hc->last_byte_index >= hc->first_byte_index ) &&
+			 ( ( hc->last_byte_index != hc->sb.st_size - 1 ) ||
+			   ( hc->first_byte_index > 0 ) ) &&
+			 ( hc->range_if == (time_t) -1 ||
+			   hc->range_if == hc->sb.st_mtime ) )
 		{
-		send_mime(
-			hc, 200, ok200title, hc->encodings, "", hc->type, hc->sb.st_size,
-			hc->sb.st_mtime );
+			send_mime(hc, 206, ok206title, hc->encodings, "", hc->type, hc->sb.st_size,hc->sb.st_mtime );
 		}
+		else {
+			send_mime(hc, 200, ok200title, hc->encodings, "", hc->type, hc->sb.st_size,hc->sb.st_mtime );
+		}
+	}
 	else if ( hc->if_modified_since != (time_t) -1 &&
 		 hc->if_modified_since >= hc->sb.st_mtime )
 		{
@@ -3862,13 +3854,22 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 			httpd_set_ndelay(hc->conn_fd);
 		}
 
-		send_mime(
-			hc, 200, ok200title, hc->encodings, "", hc->type, hc->sb.st_size,
-			hc->sb.st_mtime );
+		if ( (hc->bfield & HC_GOT_RANGE) &&
+			 ( hc->last_byte_index >= hc->first_byte_index ) &&
+			 ( ( hc->last_byte_index != hc->sb.st_size - 1 ) ||
+			   ( hc->first_byte_index > 0 ) ) &&
+			 ( hc->range_if == (time_t) -1 ||
+			   hc->range_if == hc->sb.st_mtime ) )
+		{
+			send_mime(hc, 206, ok206title, hc->encodings, "", hc->type, hc->sb.st_size,hc->sb.st_mtime );
+		}
+		else {
+			send_mime(hc, 200, ok200title, hc->encodings, "", hc->type, hc->sb.st_size,hc->sb.st_mtime );
+			hc->bfield &= ~HC_GOT_RANGE;
+		}
 	}
 	return 0;
 }
-
 
 static void make_log_entry(const httpd_conn* hc, time_t now, int status) {
 	char* ru;
