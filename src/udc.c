@@ -11,9 +11,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>   /* errno             */
+#include <pthread.h>
 #include <gpgme.h>
 #include <regex.h>
-#include <pthread.h>
 #include <ctype.h>
 
 #include "config.h"
@@ -257,11 +257,12 @@ int udc_write_synthesis(const char * filename, sync_synthesis_t * synth) {
 
 /*! update OpenUDC parameters (creation sheet)
  */
-void udc_create( httpd_conn* hc ) {
+void udc_create( connecttab * connect ) {
 	size_t c;
 	ssize_t r, csize;
 	char * cp, * eol, * boundary=NULL;
 	int i=0, nsigs=1, boundarylen=0, issig;
+	httpd_conn * hc = connect->hc;
 
 	gpgme_data_t sheet, * sigs;
 	gpgme_ctx_t gpglctx;
@@ -270,9 +271,12 @@ void udc_create( httpd_conn* hc ) {
 	
 	char * buff;
 
+	pthread_cleanup_push(httpd_clear_connection, connect);
+	pause();
+
 	if ( strncasecmp( hc->contenttype, "multipart/msigned", sizeof("multipart/msigned")-1 ) ) {
 		httpd_send_err(hc, 415, err415title, "", "%.80s unrecognized here, expected multipart/msigned.", hc->contenttype);
-		exit(EXIT_FAILURE);
+		pthread_exit(NULL);
 	}
 
 	cp=hc->contenttype+sizeof("multipart/msigned")-1;
@@ -304,7 +308,7 @@ void udc_create( httpd_conn* hc ) {
 			nsigs=atoi(cp);
 			if (!nsigs) {
 				httpd_send_err(hc, 400, httpd_err400title, "", err500form, "nsigs=" );
-				exit(EXIT_FAILURE);
+				pthread_exit(NULL);
 			}
 		}
 		/* find next separator (ignore unknow stuff) */
@@ -314,7 +318,7 @@ void udc_create( httpd_conn* hc ) {
 
 	if ( boundarylen < 1 ) {
 		httpd_send_err(hc, 400, httpd_err400title, "", err500form, "boundary=" );
-		exit(EXIT_FAILURE);
+		pthread_exit(NULL);
 	}
 
 	if ( nsigs < 0 )
@@ -322,12 +326,12 @@ void udc_create( httpd_conn* hc ) {
 
 	if ( nsigs == 0 ) {
 		httpd_send_err(hc, 501, err501title, "", err501form, "nsigs == 0" );
-		exit(EXIT_FAILURE);
+		pthread_exit(NULL);
 	}
 
 	if (hc->contentlength < 12) {
 		httpd_send_err(hc, 411, err411title, "", "Content-Length is absent or too short (%.80s)", "12");
-		exit(EXIT_FAILURE);
+		pthread_exit(NULL);
 	}
 
 	cp=boundary;
@@ -336,7 +340,7 @@ void udc_create( httpd_conn* hc ) {
 	buff=malloc(hc->contentlength+1);
 	if ( (!buff) || (!sigs) || (!boundary) ) {
 		httpd_send_err(hc, 500, err500title, "", err500form, "m" );
-		exit(EXIT_FAILURE);
+		pthread_exit(NULL);
 	}
 
 	strcpy(boundary,"--");
@@ -353,14 +357,14 @@ void udc_create( httpd_conn* hc ) {
 			nanosleep(&tim, NULL);
 			if (i++>50) { /* 50*300ms = 15 seconds */
 				httpd_send_err(hc, 408, httpd_err408title, "", httpd_err408form, "" );
-				exit(EXIT_FAILURE);
+				pthread_exit(NULL);
 			}
 			continue;
 		} else
 			i=0;
 		if ( r <= 0 ) {
 			httpd_send_err(hc, 500, err500title, "", err500form, "read error" );
-			exit(EXIT_FAILURE);
+			pthread_exit(NULL);
 		}
 		c += r;
 	}
@@ -368,7 +372,7 @@ void udc_create( httpd_conn* hc ) {
 
 	i=0;
 	cp=buff;
-	//while ( eol=strchr(cp, '\n') ) {
+
 	while ( !strncmp(cp,boundary,2+boundarylen) ) {
 
 		if ( !strncmp(cp+2+boundarylen,"--",2) ) /* last boundary */
@@ -396,34 +400,34 @@ void udc_create( httpd_conn* hc ) {
 		}
 		if ( csize < 1 ) {
 			httpd_send_err(hc, 411, err411title, "", "Content-Length is absent or too short (%.80s)", "1");
-			exit(EXIT_FAILURE);
+			pthread_exit(NULL);
 		}
 		if (issig) {
 			if (i>=nsigs) {
 				httpd_send_err(hc, 400, httpd_err400title, "", err500form, "sigs>nsigs" );
-				exit(EXIT_FAILURE);
+				pthread_exit(NULL);
 			}
 			if ( ( gpgerr=gpgme_data_new_from_mem(&sigs[i],cp,csize,0) ) != GPG_ERR_NO_ERROR ) {
 				httpd_send_err(hc, 500, err500title, "", err500form, gpgme_strerror(gpgerr) );
-				exit(EXIT_FAILURE);
+				pthread_exit(NULL);
 			}
 			i++;
 		} else if ( ( gpgerr=gpgme_data_new_from_mem(&sheet,cp,csize,0) ) != GPG_ERR_NO_ERROR ) {
 				httpd_send_err(hc, 500, err500title, "", err500form, gpgme_strerror(gpgerr) );
-				exit(EXIT_FAILURE);
+				pthread_exit(NULL);
 		}
 		cp+=csize;
 	}
 	if (i!=nsigs) {
 		httpd_send_err(hc, 400, httpd_err400title, "", err500form, "sigs!=nsigs" );
-		exit(EXIT_FAILURE);
+		pthread_exit(NULL);
 	}
 
 	/* create context */
 	gpgerr=gpgme_new(&gpglctx);
 	if ( gpgerr  != GPG_ERR_NO_ERROR ) {
 		httpd_send_err(hc, 500, err500title, "", err500form, gpgme_strerror(gpgerr) );
-		exit(EXIT_FAILURE);
+		pthread_exit(NULL);
 	}
 
 	for (i=0;i<nsigs;i++) {
@@ -444,10 +448,11 @@ void udc_create( httpd_conn* hc ) {
 */
 	httpd_send_err(hc, 501, err501title, "", err501form, "udc/create" );
 	gpgme_release (gpglctx);
-	exit(EXIT_SUCCESS);
+	pthread_exit(NULL);
+
+	pthread_cleanup_pop(1);
 
 }
-
 
 void udc_validate( httpd_conn* hc ) {
 
@@ -455,4 +460,5 @@ void udc_validate( httpd_conn* hc ) {
 	//gpgme_release (gpglctx);
 	exit(EXIT_SUCCESS);
 }
+
 #endif /* OPENUDC */

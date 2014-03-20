@@ -89,13 +89,7 @@ typedef long long int64_t;
 char* argv0;
 static int debug = 0;
 static char* dir = (char*) 0;
-#ifdef ALWAYS_CHROOT
-static int do_chroot = 1;
-static int hsbfield = ( HS_NO_SYMLINK_CHECK | HS_PKS_ADD_MERGE_ONLY );
-#else /* ALWAYS_CHROOT */
-static int do_chroot = 0;
 static int hsbfield = HS_PKS_ADD_MERGE_ONLY;
-#endif /* ALWAYS_CHROOT */
 static int cgi_limit = CGI_LIMIT;
 #ifdef CGI_PATTERN
 static char * cgi_pattern = CGI_PATTERN;
@@ -132,14 +126,6 @@ static int numthrottles, maxthrottles;
 static connecttab* connects;
 static int num_connects, max_connects, first_free_connect;
 static int httpd_conn_count;
-
-/* The connection states. */
-#define CNST_FREE 0
-#define CNST_READING 1
-#define CNST_SENDING 2
-#define CNST_PAUSING 3
-#define CNST_LINGERING 4
-#define CNST_THREADING 5
 
 static httpd_server* hs = (httpd_server*) 0;
 int terminate = 0;
@@ -647,40 +633,15 @@ main( int argc, char** argv )
 		}
 	}
 
-	/* Chroot if requested. */
-	if ( do_chroot ) {
-		if ( chroot( cwd ) < 0 )
-			DIE(1, "chroot - %m" );
-		/* If we're logging and the logfile's pathname begins with the
-		** chroot tree's pathname, then elide the chroot pathname so
-		** that the logfile pathname still works from inside the chroot
-		** tree.
-		*/
-		if ( logfile != (char*) 0 && strcmp( logfile, "-" ) != 0 )
-			{
-			if ( strncmp( logfile, cwd, strlen( cwd ) ) == 0 )
-				{
-				(void) strcpy( logfile, &logfile[strlen( cwd ) - 1] );
-				/* (We already guaranteed that cwd ends with a slash, so leaving
-				** that slash in logfile makes it an absolute pathname within
-				** the chroot tree.)
-				*/
-				}
-			else
-				{
-				syslog( LOG_WARNING, "logfile is not within the chroot tree, you will not be able to re-open it" );
-				warnx("logfile is not within the chroot tree, you will not be able to re-open it.");
-				}
-			}
-		(void) strcpy( cwd, "/" );
-		/* Always chdir to / after a chroot. */
-		if ( chdir( cwd ) < 0 )
-			DIE(1, "chroot chdir - %m" );
-	}
-
 	/* Switch to the web (public) directory. */
 	if ( chdir(WEB_DIR) < 0 )
 		DIE(1,"chdir %s - %m %s",WEB_DIR,"(forget "SOFTWARE_NAME"_init.sh ?)");
+
+	/* and update cwd */
+	if (! getcwd( cwd, sizeof(cwd) - 1 ) )
+		DIE(1, "getcwd - %m" );
+	if ( cwd[strlen( cwd ) - 1] != '/' )
+		(void) strcat( cwd, "/" );
 
 	/* Set up to catch signals. */
 #ifdef HAVE_SIGSET
@@ -745,8 +706,7 @@ main( int argc, char** argv )
 	stats_simultaneous = 0;
 
 	/* If we're root, try to become someone else. */
-	if ( getuid() == 0 )
-		{
+	if ( getuid() == 0 ) {
 		/* Set aux groups to null. */
 		if ( setgroups( 0, (const gid_t*) 0 ) < 0 )
 			DIE(1,"setgroups - %m");
@@ -764,13 +724,7 @@ main( int argc, char** argv )
 		/* Setenv(HOME) (for gpgme) . */
 		if ( setenv("HOME",pwd->pw_dir,1) < 0 )
 			DIE(1, "setenv - %m" );
-
-		/* Check for unnecessary security exposure. */
-		if ( ! do_chroot )
-			syslog(
-				LOG_WARNING,
-				"started as root without requesting chroot(), warning only" );
-		}
+	}
 
 #ifdef CHECK_UDID2
 	if (regcomp(&udid2c_regex, "^udid2;c;[A-Z]{1,20};[A-Z-]{1,20};[0-9-]{10};[0-9.e+-]{14};[0-9]+", REG_EXTENDED|REG_NOSUB))
@@ -1060,16 +1014,6 @@ parse_args( int argc, char** argv )
 			++argn;
 			dir = argv[argn];
 			}
-		else if ( strcmp( argv[argn], "-r" ) == 0 )
-			{
-			do_chroot = 1;
-			hsbfield |= HS_NO_SYMLINK_CHECK;
-			}
-		else if ( strcmp( argv[argn], "-nor" ) == 0 )
-			{
-			do_chroot = 0;
-			hsbfield &= ~HS_NO_SYMLINK_CHECK;
-			}
 		else if ( strcmp( argv[argn], "-L" ) == 0 && argn + 1 < argc )
 			{
 			++argn;
@@ -1167,7 +1111,6 @@ usage( void )
 #ifdef VHOSTING
 			    "	-vh         enable virtual hosting\n"
 #endif /* VHOSTING */
-			    "	-r|-nor     enable/disable chroot - default: disable to make all cgi works\n"
 #if DEFAULT_CONNLIMIT > 0
 			    "	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: %d\n"
 #else /* DEFAULT_CONNLIMIT > 0 */
@@ -1256,18 +1199,6 @@ static int read_config( char* filename )
 				{
 				value_required( name, value );
 				dir = e_strdup( value );
-				}
-			else if ( strcasecmp( name, "chroot" ) == 0 )
-				{
-				no_value_required( name, value );
-				do_chroot = 1;
-				hsbfield |= HS_NO_SYMLINK_CHECK;
-				}
-			else if ( strcasecmp( name, "nochroot" ) == 0 )
-				{
-				no_value_required( name, value );
-				do_chroot = 0;
-				hsbfield &= ~HS_NO_SYMLINK_CHECK;
 				}
 			else if ( strcasecmp( name, "connlimit" ) == 0 )
 				{
@@ -1715,7 +1646,7 @@ handle_read( connecttab* c, struct timeval* tvP )
 		//hc->bytes_sent = CGI_BYTECOUNT;
 		hc->bfield &= ~HC_SHOULD_LINGER;
 
-		/* there are now no cgi_limit or CGI_TIMELIMIT management because it is to complicated
+		/* there are now yet no thread_limit or THREAD_TIMELIMIT management because it is to complicated
 		 * to manage their mutex and using cgi_pthread_cleanup_push or pthread_cancel.
 		 * To manage at least CGI_TIMELIMIT is a TODO. */
 
@@ -1925,7 +1856,7 @@ check_throttles( connecttab* c )
 	c->max_limit = c->min_limit = THROTTLE_NOLIMIT;
 	for ( tnum = 0; tnum < numthrottles && c->numtnums < MAXTHROTTLENUMS;
 		  ++tnum )
-		if ( match( throttles[tnum].pattern, c->hc->expnfilename ) )
+		if ( match( throttles[tnum].pattern, c->hc->realfilename ) )
 			{
 			/* If we're way over the limit, don't even start. */
 			if ( throttles[tnum].rate > throttles[tnum].max_limit * 2 )
@@ -2041,7 +1972,7 @@ clear_connection( connecttab* c, struct timeval* tvP )
 
 	/* This is our version of Apache's lingering_close() routine, which is
 	** their version of the often-broken SO_LINGER socket option.  For why
-	** this is necessary, see http://www.apache.org/docs/misc/fin_wait_2.html
+	** this is necessary, see http://httpd.apache.org/docs/2.0/misc/fin_wait_2.html
 	** What we do is delay the actual closing for a few seconds, while reading
 	** any bytes that come over the connection.  However, we don't want to do
 	** this unless it's necessary, because it ties up a connection slot and
@@ -2087,15 +2018,15 @@ really_clear_connection( connecttab* c, struct timeval* tvP )
 	int tind;
 	static pthread_mutex_t ccmutex = PTHREAD_MUTEX_INITIALIZER;
 
-	if ( c->hc->file_address == (char*) 0 && hc->bytes_sent <= 0 )
+	if ( c->hc->file_address == (char*) 0 && c->hc->bytes_sent <= 0 )
 		/* No file address means someone else (a child or a thread process) has handling it.
-		 * if  hc->bytes_sent seems not updated, set it to CGI_BYTECOUNT */
-		 hc->bytes_sent = CGI_BYTECOUNT;
+		 * if  c->hc->bytes_sent seems not updated, set it to CGI_BYTECOUNT */
+		 c->hc->bytes_sent = CGI_BYTECOUNT;
 
 	pthread_mutex_lock(&ccmutex);
 
 	for ( tind = 0; tind < c->numtnums; ++tind )
-		throttles[c->tnums[tind]].bytes_since_avg += hc->bytes_sent;
+		throttles[c->tnums[tind]].bytes_since_avg += c->hc->bytes_sent;
 
 	stats_bytes += c->hc->bytes_sent;
 	if ( c->conn_state != CNST_PAUSING &&  c->conn_state != CNST_THREADING )

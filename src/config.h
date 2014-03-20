@@ -126,7 +126,7 @@
 */
 #define SIG_EXCLUDE_PATTERN ""
 
-/* CONFIGURE: sigcache directory (inside the running one which should be chrooted)	
+/* CONFIGURE: sigcache directory (inside the application home directory)
  * which contain all the cached signatures. If a "multipart/msigned" is asked
  * through the "Accept:" request header, and requested ressource match SIG_PATTERN ;
  * then it check if the expanded file is older than the cached signature.
@@ -242,15 +242,6 @@
 */
 #define SHOW_SERVER_VERSION
 
-/* CONFIGURE: Define this if you want to always chroot(), without having
-** to give the -r command line flag.  Some people like this as a security
-** measure, to prevent inadvertant exposure by accidentally running without -r.
-** You can still disable it at runtime with the -nor flag.
-*/
-#ifdef notdef
-#define ALWAYS_CHROOT
-#endif
-
 /* CONFIGURE: When started as root, the default username to switch to after
 ** initializing.  If this user (or the one specified by the -u flag) does
 ** not exist, the program will refuse to run.
@@ -263,9 +254,9 @@
  */
 #define DEFAULT_CFILE SOFTWARE_NAME".conf"
 
-/* CONFIGURE: data directory (inside the running one which should be chrooted)	
+/* CONFIGURE: data directory (inside the application home directory)
  * which contain all public data. It should also be defined in Makefiles
- * because there are things (like cgi programs) to install in it.
+ * because there may be things (like cgi programs) to install in it.
  */
 #define WEB_DIR "pub"
 

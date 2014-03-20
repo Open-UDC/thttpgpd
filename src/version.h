@@ -11,7 +11,7 @@
 #endif /* OPENUDC */
 #endif /* SOFTWARE_NAME */
 
-#define SOFTWARE_VERSION "0.3.0 20Nov2013"
+#define SOFTWARE_VERSION "0.3.2 13Jan2014"
 #define SOFTWARE_ADDRESS "http://openudc.org/"
 
 #endif /* _VERSION_H_ */

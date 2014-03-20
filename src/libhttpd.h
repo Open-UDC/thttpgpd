@@ -70,7 +70,7 @@ typedef struct {
 	FILE* logfp;
 	} httpd_server;
 
-#define HS_NO_SYMLINK_CHECK (1<<1)
+//#define HS_NO_SYMLINK_CHECK (1<<1)
 #define HS_NO_LOG (1<<2)
 #define HS_PKS_ADD_MERGE_ONLY (1<<3)
 #define HS_VIRTUAL_HOST (1<<4)
@@ -93,9 +93,8 @@ typedef struct {
 	char* decodedurl;
 	char* protocol;
 	char* origfilename;
-	char* expnfilename;
+	char* realfilename;
 	char* encodings;
-	char* pathinfo;
 	char* query;
 	char* referer;
 	char* useragent;
@@ -108,12 +107,13 @@ typedef struct {
 	char* hdrhost;
 	char* hostdir;
 	char* authorization;
+	char* forwardedfor;
 	char* remoteuser;
 	char* response;
 	char* tmpbuff; /* used to prepare string as parsing and starting request is now multithread, it replace some previous static buff */
-	size_t maxdecodedurl, maxorigfilename, maxexpnfilename, maxencodings,
-		maxpathinfo, maxquery, maxaccept, maxaccepte, maxreqhost, maxhostdir,
-		maxremoteuser, maxresponse, maxtmpbuff;
+	size_t maxdecodedurl, maxorigfilename, maxencodings,
+		maxtmpbuff, maxquery, maxaccept, maxaccepte, maxreqhost, maxhostdir,
+		maxremoteuser, maxresponse;
 	size_t responselen;
 	time_t if_modified_since, range_if;
 	ssize_t contentlength; /* maybe use off_t to be able to make bigger POST on 32-bits archs ? */
@@ -125,8 +125,19 @@ typedef struct {
 	struct stat sb;
 	int conn_fd;
 	char* file_address;
-	char boundary[BOUNDARYLEN+1]
+	char boundary[BOUNDARYLEN+1];
 	} httpd_conn;
+
+#define HC_GOT_RANGE (1<<1)  /* if match "d-d" or "d-" , which is only supported (except when asked multipart/msigned on a local file) */
+#define HC_KEEP_ALIVE (1<<2)
+#define HC_SHOULD_LINGER (1<<3)
+#define HC_DETACH_SIGN (1<<4)
+#define HC_LOG_DONE (1<<5)
+
+/* Useless macros. BTW: if u really think it improves readability, u may use them */
+#define HX_SET(hx,mask) { (hx)->bfield |= (mask); }
+#define HX_UNSET(hx,mask) { (hx)->bfield &= ~(mask); }
+#define HX_IS_SET(hx,mask) ( (hx)->bfield & (mask) )
 
 /* a element managing a connection */
 typedef struct {
@@ -145,17 +156,13 @@ typedef struct {
 	off_t next_byte_index;
 	} connecttab;
 
-
-#define HC_GOT_RANGE (1<<1)  /* if match "d-d" or "d-" , which is only supported (except when asked multipart/msigned on a local file) */
-#define HC_KEEP_ALIVE (1<<2)
-#define HC_SHOULD_LINGER (1<<3)
-#define HC_DETACH_SIGN (1<<4)
-#define HC_LOG_DONE (1<<5)
-
-/* Useless macros. BTW: if u really think it improves readability, u may use them */
-#define HX_SET(hx,mask) { (hx)->bfield |= (mask); }
-#define HX_UNSET(hx,mask) { (hx)->bfield &= ~(mask); }
-#define HX_IS_SET(hx,mask) ( (hx)->bfield & (mask) )
+/* The connection states. */
+#define CNST_FREE 0
+#define CNST_READING 1
+#define CNST_SENDING 2
+#define CNST_PAUSING 3
+#define CNST_LINGERING 4
+#define CNST_THREADING 5
 
 /* struct passed to pthread_create for interposed thread */
 typedef struct {
@@ -266,7 +273,7 @@ extern void send_mime( httpd_conn* hc, int status, char* title, char* encodings,
 **
 ** Returns -1 on error.
 */
-extern int httpd_start_request( httpd_conn* hc, struct timeval* nowP );
+extern int httpd_start_request( connecttab * c);
 
 /* Actually sends any buffered response text. */
 extern void httpd_write_response( httpd_conn* hc );
@@ -354,5 +361,5 @@ extern void httpd_logstats( long secs );
 extern int httpd_dprintf( int fd, const char* format, ... );
 
 /* Allocate and generate a random string of size len (from charset [G-Vg-v]) */
-extern char *random_boundary(unsigned short len);
+char * random_boundary(char * buff, unsigned short len);
 #endif /* _LIBHTTPD_H_ */

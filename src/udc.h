@@ -68,7 +68,7 @@ int udc_write_synthesis(const char * filename, sync_synthesis_t * synth);
 
 /*! udc_create() validate, store and propagate new creation sheet.
  */
-void udc_create( httpd_conn* hc );
+void udc_create( connecttab * connect );
 
 /*! udc_validate() validate, store and propagate a transaction.
  */

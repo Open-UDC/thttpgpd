@@ -120,9 +120,8 @@ static unsigned int hash( ino_t ino, dev_t dev, off_t size, time_t ctime );
 
 
 void*
-mmc_map( char* filename, struct stat* sbP, struct timeval* nowP )
+mmc_map( char* filename, struct stat* sbP, time_t now )
 	{
-	time_t now;
 	struct stat sb;
 	Map* m;
 	int fd;
@@ -140,9 +139,7 @@ mmc_map( char* filename, struct stat* sbP, struct timeval* nowP )
 		}
 
 	/* Get the current time, if necessary. */
-	if ( nowP != (struct timeval*) 0 )
-		now = nowP->tv_sec;
-	else
+	if ( now == (time_t) 0 )
 		now = time( (time_t*) 0 );
 
 	/* See if we have it mapped already, via the hash table. */
