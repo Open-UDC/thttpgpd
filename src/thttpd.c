@@ -1638,9 +1638,9 @@ handle_read( connecttab* c, struct timeval* tvP )
 		int s;
 		sigset_t setm, sett;
 
+		fdwatch_del_fd( hc->conn_fd );
 		c->conn_state = CNST_THREADING;
 		c->started_at = tvP->tv_sec;
-		fdwatch_del_fd( hc->conn_fd );
 
 		/* set a default value for hc->bytes_sent */
 		//hc->bytes_sent = CGI_BYTECOUNT;
@@ -1680,6 +1680,29 @@ handle_send( connecttab* c, struct timeval* tvP )
 	time_t elapsed;
 	httpd_conn* hc = c->hc;
 	int tind;
+	int fd;
+
+	if ( hc->file_address == (char*) 0 ) {
+		hc->file_address = mmc_map( hc->realfilename, &(hc->sb), NULL/*tvP->tv_sec*/ );
+		if ( hc->file_address == (char*) 0 ) {
+				httpd_send_err( hc, 500, err500title, "", err500form, hc->encodedurl );
+				clear_connection( c, tvP );
+				return;
+		}
+		else if ( (hc->bfield & HC_GOT_RANGE) &&
+			 ( hc->last_byte_index >= hc->first_byte_index ) &&
+			 ( ( hc->last_byte_index != hc->sb.st_size - 1 ) ||
+			   ( hc->first_byte_index > 0 ) ) &&
+			 ( hc->range_if == (time_t) -1 ||
+			   hc->range_if == hc->sb.st_mtime ) )
+		{
+			send_mime(hc, 206, ok206title, hc->encodings, "", hc->type, hc->sb.st_size,hc->sb.st_mtime );
+		}
+		else {
+			send_mime(hc, 200, ok200title, hc->encodings, "", hc->type, hc->sb.st_size,hc->sb.st_mtime );
+			hc->bfield &= ~HC_GOT_RANGE;
+		}
+	}
 
 	if ( c->max_limit == THROTTLE_NOLIMIT )
 		max_bytes = 1000000000L;

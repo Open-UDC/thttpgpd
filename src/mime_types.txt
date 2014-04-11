@@ -80,6 +80,9 @@ mid	audio/midi
 midi	audio/midi
 mif	application/vnd.mif
 mime	message/rfc822
+mka	audio/x-matroska
+mk3d	video/x-matroska-3d
+mkv	video/x-matroska
 mml	application/mathml+xml
 mov	video/quicktime
 movie	video/x-sgi-movie
@@ -173,6 +176,8 @@ wav	audio/x-wav
 wax	audio/x-ms-wax
 wbmp	image/vnd.wap.wbmp
 wbxml	application/vnd.wap.wbxml
+weba	audio/webm
+webm	video/webm
 wm	video/x-ms-wm
 wma	audio/x-ms-wma
 wmd	application/x-ms-wmd

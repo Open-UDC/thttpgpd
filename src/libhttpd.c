@@ -548,30 +548,11 @@ send_mime( httpd_conn* hc, int status, char* title, char* encodings, char* extra
 	char modbuf[100];
 	char fixed_type[500];
 	char buf[1000];
-	int partial_content;
-
 
 	hc->status = status;
 	hc->bytes_to_send = length;
 	if ( hc->http_version > 9 )
 		{
-		if ( status == 200 && (hc->bfield & HC_GOT_RANGE) &&
-			 ( hc->last_byte_index >= hc->first_byte_index ) &&
-			 ( ( hc->last_byte_index != length - 1 ) ||
-			   ( hc->first_byte_index > 0 ) ) &&
-			 ( hc->range_if == (time_t) -1 ||
-			   hc->range_if == hc->sb.st_mtime ) )
-			{
-			partial_content = 1;
-			hc->status = status = 206;
-			title = ok206title;
-			}
-		else
-			{
-			partial_content = 0;
-			hc->bfield &= ~HC_GOT_RANGE;
-			}
-
 		now = time( (time_t*) 0 );
 
 		if ( mod == (time_t) 0 )
@@ -597,7 +578,7 @@ send_mime( httpd_conn* hc, int status, char* title, char* encodings, char* extra
 				"Content-Encoding: %s\015\012", encodings );
 			add_response( hc, buf );
 			}
-		if ( partial_content )
+		if ( status == 206 )
 			{
 			(void) snprintf( buf, sizeof(buf),
 				"Content-Range: bytes %lld-%lld/%lld\015\012%s %lld\015\012",
@@ -713,6 +694,11 @@ httpd_send_err( httpd_conn* hc, int status, char* title, char* extraheads, const
 	send_mime(
 		hc, status, title, "", extraheads, "text/html; charset=%s", (off_t) -1,
 		(time_t) 0 );
+	if ( hc->method == METHOD_HEAD ) {
+		httpd_write_response( hc );
+		return;
+	}
+
 	(void) snprintf( buf, sizeof(buf), "\
 <HTML>\n\
 <HEAD><TITLE>%d %s</TITLE></HEAD>\n\
@@ -916,8 +902,8 @@ auth_check( httpd_conn* hc)
 
 	/* Is it the authorization file ? */
 	if ( !S_ISDIR(hc->sb.st_mode) && 
-			(strcmp( hc->realfilename, AUTH_FILE ) == 0 /* for the root directory */
-			|| strcmp(hc->realfilename, authpath) ) )
+			(!strcmp( hc->realfilename, AUTH_FILE ) /* for the root directory */
+			|| !strcmp(hc->realfilename, authpath) ) )
 		{
 		syslog(
 			LOG_NOTICE,
@@ -2460,12 +2446,7 @@ static void child_r_start(httpd_conn* hc) {
 static int launch_process(void (*funct) (httpd_conn* ), httpd_conn* hc, int methods, char * fname) {
 	int r;
 
-	if ( hc->method == METHOD_HEAD ) {
-		send_mime(
-			hc, 200, ok200title, "", "", "text/html; charset=%s", (off_t) -1,
-			hc->sb.st_mtime );
-		return(-1);
-	} else if ( ! (hc->method & methods) ) {
+	if ( ! (hc->method & methods) ) {
 		httpd_send_err( hc, 501, err501title, "", err501form, httpd_method_str( hc->method ) );
 		return(-1);
 	}
@@ -2537,6 +2518,9 @@ static void ls(httpd_conn* hc) {
 		hc, 200, ok200title, "", "", "text/html; charset=%s",
 		(off_t) -1, hc->sb.st_mtime );
 	httpd_write_response( hc );
+
+	if ( hc->method == METHOD_HEAD )
+		exit(0);
 
 	/* Open a stdio stream so that we can use fprintf, which is more
 	** efficient than a bunch of separate write()s.  We don't have
@@ -3574,18 +3558,12 @@ cgi( httpd_conn* hc )
  * \return a negative number to finish the connection, or 0 if success.
  */
 int httpd_start_request( connecttab * c) {
-	static char* indexname;
-	static size_t maxindexname = 0;
 	static const char* index_names[] = { INDEX_NAMES };
 	int i;
 #ifdef AUTH_FILE
-	static char* dirname;
-	static size_t maxdirname = 0;
 	static pthread_mutex_t dnmutex = PTHREAD_MUTEX_INITIALIZER;
 #endif /* AUTH_FILE */
 	size_t expnlen, indxlen;
-	char* cp;
-	char* pi;
 	httpd_conn* hc=c->hc;
 
 	if ( hc->method != METHOD_GET && hc->method != METHOD_HEAD &&
@@ -3661,12 +3639,12 @@ int httpd_start_request( connecttab * c) {
 #endif
 
 #ifdef AUTH_FILE
-		pthread_mutex_lock(&dnmutex);
-		pthread_cleanup_push(pthread_mutex_unlock,&dnmutex);
-		/* Check authorization for this directory. */
-		if ( auth_check( hc ) == -1 )
-			return -1;
-		pthread_cleanup_pop(1);
+	pthread_mutex_lock(&dnmutex);
+	pthread_cleanup_push(pthread_mutex_unlock,&dnmutex);
+	/* Check authorization for this directory. */
+	if ( auth_check( hc ) == -1 )
+		pthread_exit(NULL);
+	pthread_cleanup_pop(1);
 #endif /* AUTH_FILE */
 
 	/* Is it a directory? */
@@ -3718,7 +3696,7 @@ int httpd_start_request( connecttab * c) {
 			}
 
 		/* Ok, generate an index. */
-		return launch_process(ls, hc, METHOD_GET, "indexing");
+		return launch_process(ls, hc, METHOD_HEAD | METHOD_GET, "indexing");
 #else /* GENERATE_INDEXES */
 		syslog(
 			LOG_INFO, "%.80s URL \"%.80s\" tried to index a directory",
@@ -3823,14 +3801,22 @@ int httpd_start_request( connecttab * c) {
 
 	figure_mime( hc );
 
-	if ( hc->method == METHOD_HEAD )
+	if ( hc->method == METHOD_HEAD ) {
+		if ( (hc->bfield & HC_GOT_RANGE) &&
+			 ( hc->last_byte_index >= hc->first_byte_index ) &&
+			 ( ( hc->last_byte_index != hc->sb.st_size - 1 ) ||
+			   ( hc->first_byte_index > 0 ) ) &&
+			 ( hc->range_if == (time_t) -1 ||
+			   hc->range_if == hc->sb.st_mtime ) )
 		{
-		send_mime(
-			hc, 200, ok200title, hc->encodings, "", hc->type, hc->sb.st_size,
-			hc->sb.st_mtime );
+			send_mime(hc, 206, ok206title, hc->encodings, "", hc->type, hc->sb.st_size,hc->sb.st_mtime );
+		}
+		else {
+			send_mime(hc, 200, ok200title, hc->encodings, "", hc->type, hc->sb.st_size,hc->sb.st_mtime );
+		}
 		httpd_write_response( hc );
 		return;
-		}
+	}
 	else if ( hc->if_modified_since != (time_t) -1 &&
 		 hc->if_modified_since >= hc->sb.st_mtime )
 		{
@@ -3852,19 +3838,6 @@ int httpd_start_request( connecttab * c) {
 		else
 			c->end_byte_index = hc->bytes_to_send;
 
-		/* Cool, we have a valid connection and a file to send to it. */
-		c->conn_state = CNST_SENDING;
-		//c->started_at = tvP->tv_sec; //already set before threading
-		c->wouldblock_delay = 0;
-
-		fdwatch_add_fd( hc->conn_fd, c, FDW_WRITE );
-
-		hc->file_address = mmc_map( hc->realfilename, &(hc->sb), c->started_at );
-
-		if ( hc->file_address == (char*) 0 ) {
-			httpd_send_err( hc, 500, err500title, "", err500form, hc->encodedurl );
-			return -1;
-		}
 		/* (Won't sign If To much forks are already running )*/
 		if (hc->bfield & HC_DETACH_SIGN && ( hc->hs->cgi_limit <= 0 || hc->hs->cgi_count < hc->hs->cgi_limit ) ) {
 			int ipid,p[2];
@@ -3900,13 +3873,16 @@ int httpd_start_request( connecttab * c) {
 			httpd_set_ndelay(hc->conn_fd);
 		}
 
-		send_mime(
-			hc, 200, ok200title, hc->encodings, "", hc->type, hc->sb.st_size,
-			hc->sb.st_mtime );
+		/* Cool, we have a valid connection and a file to send to it. */
+		c->conn_state = CNST_SENDING;
+		//c->started_at = tvP->tv_sec; //already set before threading
+		c->wouldblock_delay = 0;
+
+		fdwatch_add_fd( hc->conn_fd, c, FDW_WRITE );
+
 	}
 	return 0;
 }
-
 
 static void make_log_entry(const httpd_conn* hc, time_t now, int status) {
 	char* ru;
