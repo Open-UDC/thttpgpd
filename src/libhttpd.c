@@ -3618,18 +3618,20 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 		}
 
 #ifdef FORBID_HIDDEN_RESSOURCE
+	{
 	/* Is it hidden ?  ( basename or a parent dir beginning with a '.' ) */
 	/* Note: we have stat realfilename wich is, if request was on a symlink, the symlink destination */
-	cp=hc->realfilename;
-	do {
-		if ( cp[0] == '.' && cp[1] != '\0' ) {
-			httpd_send_err(
-				hc, 403, err403title, "",
-				ERROR_FORM( err403form, "The requested URL '%.80s' resolves to something hidden (an element of its real path began with '.').\n" ),
-				hc->encodedurl );
-			return -1;
-		}
-	} while ( (cp=strchr(cp, '/')) && cp++ );
+		char * cp=hc->realfilename;
+		do {
+			if ( cp[0] == '.' && cp[1] != '\0' ) {
+				httpd_send_err(
+					hc, 403, err403title, "",
+					ERROR_FORM( err403form, "The requested URL '%.80s' resolves to something hidden (an element of its real path began with '.').\n" ),
+					hc->encodedurl );
+				return -1;
+			}
+		} while ( (cp=strchr(cp, '/')) && cp++ );
+	}
 #endif
 
 #ifdef AUTH_FILE
