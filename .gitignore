@@ -11,5 +11,3 @@ src/mime_encodings.h
 src/mime_types.h
 src/pks/Makefile
 src/pks/index.html
-src/thttpgpd
-src/ludd

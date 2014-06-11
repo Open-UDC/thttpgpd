@@ -118,6 +118,9 @@ if [ -d "$dir/pub" -o -d "$dir/sigcache" -o -d "$dir/gpgme" ] ; then
 	esac
 fi
 
+# To avoid wrinting "|| exit 1 ..."
+set -e 
+
 mkdir -pv  "$dir/gpgme" "$dir/sigcache" "$dir/pub"
 
 if [[ "$dir" != "$refdir" ]] ; then
@@ -135,6 +138,7 @@ if ((isroot)) ; then
 	chown -R "$LUDDUSER" "$dir/sigcache"
 	[ "$CURRENCY" ] && chown -R "$LUDDUSER" "$dir/pub/udc"
 fi
+set +e
 
 mybotkeys=($(gpg --list-secret-keys --with-colons --with-fingerprint "ubot1;" | grep "^fpr" | cut -d: -f 10))
 
