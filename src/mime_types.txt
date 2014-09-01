@@ -1,7 +1,7 @@
 # mime_types.txt
 #
 # A list of file extensions followed by the corresponding MIME type.
-# Extensions not found in the table are returned as text/plain.
+# Extensions not found in the table are returned as text/html.
 
 a	application/octet-stream
 aab	application/x-authorware-bin
