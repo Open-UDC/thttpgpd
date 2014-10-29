@@ -270,6 +270,7 @@ port=$myport
 #sigpat=/cgi-bin/*
 
 # Specifies a local or remote socket for fastcgi (php, django-python, ...)
+# NOTE: this feature is still experimental, and DOESN'T WORK in versions < 1.0 !
 #fastcgipass=unix:/var/lib/php-fpm/php-fpm.sock
 #fastcgipass=127.0.0.1:9000
 

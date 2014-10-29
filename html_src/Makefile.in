@@ -46,8 +46,8 @@ CLEANFILES =
 all:
 
 install:	all
-	[ -f "$(REFDIR)/$(WEBDIR)/robots.txt" ] || $(INSTALL) -m 444 $(SOFTWARE)_robots.txt $(REFDIR)/$(WEBDIR)/robots.txt
-	[ -f "$(REFDIR)/$(WEBDIR)/favicon.ico" ] || $(INSTALL) -m 444 $(SOFTWARE).ico $(REFDIR)/$(WEBDIR)/favicon.ico
+	$(INSTALL) -m 644 $(SOFTWARE)_robots.txt $(REFDIR)/$(WEBDIR)/robots.txt
+	$(INSTALL) -m 644 $(SOFTWARE).ico $(REFDIR)/$(WEBDIR)/favicon.ico
 
 uninstall:
 	
