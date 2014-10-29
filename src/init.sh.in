@@ -125,7 +125,7 @@ mkdir -pv  "$dir/gpgme" "$dir/sigcache" "$dir/pub"
 
 if [[ "$dir" != "$refdir" ]] ; then
 	cp -avf "$refdir/pub/pks" "$dir/pub/"
-	cp -av "$refdir/pub/favicon.ico" "$refdir/pub/robots.txt" "$dir/pub/"
+	cp -av "$refdir/pub/favicon.ico" "$refdir/pub/robots.txt" "$dir/pub/" || true
 	if [ "$CURRENCY" ] ; then 
 		cp -avf "$refdir/pub/udid2" "$dir/pub/"
 		mkdir -p "$dir/pub/udc/$CURRENCY"
