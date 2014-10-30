@@ -169,7 +169,6 @@ static void cgi_interpose_input(interpose_args_t * args);
 static ssize_t fp2fd_gpg_data_rd_cb(struct fp2fd_gpg_data_handle * handle, void *buffer, size_t size);
 static void gpg_data_release_cb(void *handle);
 static void cgi_child( httpd_conn* hc );
-static int cgi( httpd_conn* hc );
 static void make_log_entry(const httpd_conn* hc, time_t now, int status);
 static inline int sockaddr_check( const struct sockaddr * sa );
 static inline size_t sockaddr_len( const struct sockaddr * sa );
@@ -3004,7 +3003,7 @@ static const char * chdir_path(const char * path) {
  */
 void httpd_parse_resp(interpose_args_t * args) {
 	const httpd_conn * hc=args->hc;
-	int cgi=args->option;
+	int optcgi=args->option;
 #define SIG_CACHE_DIR "../"SIG_CACHEDIR
 #define HTTP_MAX_CONTENTHEADERS 9
 #define HTTP_MAX_HEADERS 40
@@ -3034,8 +3033,8 @@ void httpd_parse_resp(interpose_args_t * args) {
 	struct stat sts;
 
 
-	do_sign=(cgi?0:1);
-	use_cache=0; /* will be set to 1 (use cache) or 2 (do the cache) if ( !cgi and SIG_CACHE_DIR exist) later */
+	do_sign=(optcgi?0:1);
+	use_cache=0; /* will be set to 1 (use cache) or 2 (do the cache) if ( !optcgi and SIG_CACHE_DIR exist) later */
 
 	/* use a file descriptor for getline (which is POSIX since 2008, glibc >= 2.10 )*/
 	if ( !(fp=fdopen(args->rfd,"r")) ) {
@@ -3105,12 +3104,12 @@ void httpd_parse_resp(interpose_args_t * args) {
 	
 	/* If there were no "Content-*:" headers, bail. */
 	if ( !c_headers[0] ) {
-		syslog( LOG_ERR, "no header (%d)",cgi);
+		syslog( LOG_ERR, "no header (%d)",optcgi);
 		httpd_send_err2(args->wfd, 500, err500title, err500form);
 		HTTPD_PARSE_RESP_RETURN(500);
 	}
 
-	if (cgi) {
+	if (optcgi) {
 		/* set a default status (because cgi may return none) */
 		if (status<0)
 			status=200;
@@ -3404,7 +3403,7 @@ cgi_child( httpd_conn* hc ) {
 		pid_t ipid;
 		int pin[2],pou[2];
 
-		/* hc->conn_fd should be stdin,stdout or stderr. So save it first */
+		/* hc->conn_fd should be stdin,stdout and stderr. So save it first */
 		hc->conn_fd=dup(hc->conn_fd);
 		if ( hc->conn_fd < 0 ) {
 			httpd_send_err( hc, 500, err500title, "", err500form, "d" );
@@ -3431,10 +3430,10 @@ cgi_child( httpd_conn* hc ) {
 			httpd_send_err( hc, 500, err500title, "", err500form, "f" );
 			exit(EXIT_FAILURE);
 		}
-		if ( ipid == 0 ) {
-			/* Child Interposer process. */
+		if ( ipid > 0 ) {
+			/* Parent Interposer process. */
 			interpose_args_t agin,agou;
-			pthread_t tin;
+			pthread_t tin,tou;
 			int s;
 
 			if ( interpose_input ) {
@@ -3458,25 +3457,38 @@ cgi_child( httpd_conn* hc ) {
 				agou.wfd=hc->conn_fd;
 				agou.hc=hc;
 				agou.option=1;
-				httpd_parse_resp(&agou);
-			} else if ( interpose_input ) {
-				/* No output interposer but an input one, wait the end of the thread */
-				pthread_join(tin, NULL);
-				/* TODO: Use such call instead if possible (flag for GNU) */
-				//pthread_timedjoin_np(pthread_t thread, void **retval, const struct timespec *abstime);
+			    s=pthread_create(&tou, NULL,(void * (*)(void *)) &httpd_parse_resp, &agou);
+				if ( s !=0 ) {
+					errno=s;
+					httpd_send_err( hc, 500, err500title, "", err500form, "thc" );
+					exit(EXIT_FAILURE);
+				}
 			}
 
-			//shutdown( hc->conn_fd, SHUT_WR );
+            if (wait(&s) == -1) {
+					httpd_send_err( hc, 500, err500title, "", err500form, "wait" );
+					exit(EXIT_FAILURE);
+            }
+
+			if ( interpose_output ) {
+                pthread_join(tou, NULL);
+            }
+            shutdown( hc->conn_fd, SHUT_RDWR );
 			exit(EXIT_SUCCESS);
 		}
-		/* Parent process */
-		/* TODO: Need to schedule a kill for process ipid; but in the main process ; Or use 2 threads and pthread_timedjoin_np in the child process. Today as killing the cgi is already scheduled and SIGPIPE set to defaut, the child ipid may be kill by this signal. That's good but not sufficient. */
-
-		if ( hc->method == METHOD_POST )
+		/* child process */
+		if ( interpose_input ) {
 			dup2( pin[0], STDIN_FILENO );
+#ifndef HAVE_CLOSEFROM
+            close(pin[1]);
+#endif
+        }
 		if ( interpose_output ) {
 			dup2( pou[1], STDOUT_FILENO );
 			dup2( pou[1], STDERR_FILENO );
+#ifndef HAVE_CLOSEFROM
+		    close(pou[0]);
+#endif
 		}
 	}
 
@@ -3491,6 +3503,11 @@ cgi_child( httpd_conn* hc ) {
 	}
 #endif
 
+	/* cgi don't have to manage EINTR or EAGAIN, turn off no-delay mode. */
+	httpd_clear_ndelay( STDIN_FILENO );
+	httpd_clear_ndelay( STDOUT_FILENO );
+	httpd_clear_ndelay( STDERR_FILENO ); //should be useless ass STDOUT_FILENO and STDERR_FILENO describe the same file
+
 	/* Split the program into directory and binary, so we can chdir()
 	** to the program's own directory.  This isn't in the CGI 1.1
 	** spec, but it's what other HTTP servers do,
@@ -3504,52 +3521,6 @@ cgi_child( httpd_conn* hc ) {
 	shutdown( hc->conn_fd, SHUT_WR );
 	exit(EXIT_FAILURE);
 }
-
-static int
-cgi( httpd_conn* hc )
-	{
-	int r;
-
-	if ( hc->method == METHOD_GET || hc->method == METHOD_POST )
-		{
-		/* To much forks already running */
-		if ( hc->hs->cgi_limit > 0 && hc->hs->cgi_count >= hc->hs->cgi_limit )
-			{
-			httpd_send_err(
-				hc, 503, httpd_err503title, "", httpd_err503form,
-				hc->encodedurl );
-			return -1;
-			}
-		/* cgi don't have to manage EINTR or EAGAIN, turn off no-delay mode. */
-		httpd_clear_ndelay( hc->conn_fd );
-		r = fork( );
-		if ( r < 0 )
-			{
-			syslog( LOG_ERR, "fork - %m" );
-			httpd_send_err(
-				hc, 500, err500title, "", err500form, hc->encodedurl );
-			return -1;
-			}
-		if ( r == 0 )
-			{
-			/* Child process. */
-			child_r_start(hc);
-
-			cgi_child( hc );
-			}
-
-		/* Parent process. */
-		drop_child("CGI",r,hc);
-		}
-	else
-		{
-		httpd_send_err(
-			hc, 501, err501title, "", err501form, httpd_method_str( hc->method ) );
-		return -1;
-		}
-
-	return 0;
-	}
 
 /*
  * \return a negative number to finish the connection, or 0 if success.
@@ -3770,7 +3741,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 		{	
 		if ( hc->hs->cgi_pattern != (char*) 0 
 		&& match( hc->hs->cgi_pattern, hc->realfilename ) )
-			return cgi( hc );
+		    return launch_process(cgi_child, hc, METHOD_HEAD | METHOD_GET | METHOD_POST, "CGI");
 		else
 			{
 			syslog(
