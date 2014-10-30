@@ -11,11 +11,13 @@ MYHOST="$(hostname):11371"
 yesterday=$(($(date +"%s")-86400))
 yesterday="$(LC_ALL=C date -d@$yesterday +"%b %_d")"
 
-nba=$(grep -h "^${yesterday}.*pks/add:accept:.*(udid2;c;" "$LOGFILE.1" "$LOGFILE" | wc -l)
+nba=$(grep "^${yesterday}.*pks/add:accept:.*(udid2;c;" "$LOGFILE.1" "$LOGFILE" | wc -l)
 
 if [ "$SEND_ALL_TO" ] ; then
-	( echo -e "Subject: pks/add log report\n\n----- News -----\n" ;
-	echo "Total with \"(udid2;c;...\": $nba"
+    uba=$(grep "^${yesterday}.*pks/add:update:.*(udid2;c;" "$LOGFILE.1" "$LOGFILE" | wc -l)
+    rba=$(grep "^${yesterday}.*pks/add:reject:.*(udid2;c;" "$LOGFILE.1" "$LOGFILE" | wc -l)
+
+	( echo -e "Subject: pks/add log report: N $nba  U $uba  R $rba\n\n----- News -----\n" ;
 	( grep -h "^${yesterday}.*pks/add:accept:" "$LOGFILE.1" "$LOGFILE"  | tee /dev/stderr 3>&1 1>&2 2>&3 | wc >&2 ) 2>&1
 	echo -e "\n----- Updates -----\n"
 	( grep -h "^${yesterday}.*pks/add:update:" "$LOGFILE.1" "$LOGFILE"  | tee /dev/stderr 3>&1 1>&2 2>&3 | wc >&2 ) 2>&1
