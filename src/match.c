@@ -3,6 +3,7 @@
 ** Only does ? * and **, and multiple patterns separated by |.  Returns 1 or 0.
 **
 ** Copyright © 1995,2000 by Jef Poskanzer <jef@mail.acme.com>.
+** Copyright © 2012-2014 by Jean-Jacques Brucker <open-udc@googlegroups.com>.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without

@@ -1,4 +1,7 @@
 /* peers.h - header file for peers management
+**
+** Copyright © 2012-2014 by Jean-Jacques Brucker <open-udc@googlegroups.com>.
+** All rights reserved.
 */
 
 #ifndef _PEERS_H_

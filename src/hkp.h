@@ -1,5 +1,8 @@
 /* hkp.h - header file for hkp management
 *
+** Copyright © 2012-2014 by Jean-Jacques Brucker <open-udc@googlegroups.com>.
+** All rights reserved.
+*
 * about HKP please check following urls:
 * - http://tools.ietf.org/html/draft-shaw-openpgp-hkp-00
 * - http://en.wikipedia.org/wiki/Key_server_%28cryptographic%29

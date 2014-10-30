@@ -1,6 +1,7 @@
 /* libhttpd.c - HTTP protocol library
 **
 ** Copyright © 1995,1998,1999,2000,2001 by Jef Poskanzer <jef@mail.acme.com>.
+** Copyright © 2012-2014 by Jean-Jacques Brucker <jef@mail.acme.com>.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without

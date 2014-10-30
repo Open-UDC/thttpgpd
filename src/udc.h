@@ -1,4 +1,7 @@
 /* udc.h - header file for OpenUDC interfaces
+**
+** Copyright © 2012-2014 by Jean-Jacques Brucker <open-udc@googlegroups.com>.
+** All rights reserved.
 *
 * about OpenUDC please check following urls:
 * - http://openudc.org

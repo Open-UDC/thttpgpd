@@ -1,5 +1,8 @@
 /* hkp.c - hkp management
 *
+** Copyright © 2012-2014 by Jean-Jacques Brucker <jef@mail.acme.com>.
+** All rights reserved.
+*
 * about HKP please check following urls:
 * - http://tools.ietf.org/html/draft-shaw-openpgp-hkp-00
 * - http://en.wikipedia.org/wiki/Key_server_%28cryptographic%29
