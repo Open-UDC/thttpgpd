@@ -1,2 +1,2 @@
-/** @mainpage Welcome to LUDD
+/** @mainpage Welcome to thttpgpd/ludd
  */

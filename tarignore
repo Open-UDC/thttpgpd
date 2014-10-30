@@ -1,0 +1,16 @@
+thttpgpd-*
+luddd-*
+tarignore
+scripts/lud*
+src/thttpgpd
+src/ludd
+*.o
+Makefile
+*/Makefile
+config.log
+config.status
+src/init.sh
+src/manual.8
+src/mime_encodings.h
+src/mime_types.h
+src/pks/index.html

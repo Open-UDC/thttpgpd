@@ -127,12 +127,10 @@ doc:
 	doxygen doxydocs/Doxyfile
 
 tar:
-	@name=`sed -n -e '/SERVER_SOFTWARE/!d' -e 's,.*thttpd/,thttpd-,' -e 's, .*,,p' version.h` ; \
+	@name="$(SOFTWARE)-`sed -n 's,.*\<SOFTWARE_VERSION\>.*"\([0-9.]\+\).*,\1,p' src/version.h`" ; \
 	  rm -rf $$name ; \
 	  mkdir $$name ; \
-	  tar cf - `cat FILES` | ( cd $$name ; tar xfBp - ) ; \
-	  chmod 644 $$name/Makefile.in $$name/config.h $$name/mime_encodings.txt $$name/mime_types.txt ; \
-	  chmod 755 $$name/cgi-bin $$name/cgi-src $$name/contrib $$name/contrib/redhat-rpm ; \
+	  tar cf - -X tarignore * | ( cd $$name ; tar xfBp - ) ; \
 	  tar cf $$name.tar $$name ; \
 	  rm -rf $$name ; \
 	  gzip $$name.tar
