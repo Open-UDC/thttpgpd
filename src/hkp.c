@@ -1,6 +1,6 @@
 /* hkp.c - hkp management
 *
-** Copyright © 2012-2014 by Jean-Jacques Brucker <jef@mail.acme.com>.
+** Copyright © 2012-2014 by Jean-Jacques Brucker <open-udc@googlegroups.com>.
 ** All rights reserved.
 *
 * about HKP please check following urls:
