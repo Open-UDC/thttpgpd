@@ -1,0 +1,32 @@
+Source: thttpgpd
+Section: httpd
+Priority: extra
+Maintainer: Jean Jacques BRUCKER <jeanjacquesbrucker@gmail.com>
+Build-Depends: debhelper (>= 8.0.0), autotools-dev, libgpgme11-dev
+Standards-Version: 3.9.3
+Homepage: https://github.com/Open-UDC/thttpgpd
+Vcs-Git: git://github.com/Open-UDC/thttpgpd.git
+Vcs-Browser: https://github.com/Open-UDC/thttpgpd
+
+Package: thttpgpd
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: tiny/turbo HTTP server with OpenPGP features
+ thttpgpd is an HTTP server which :
+    * handles IPv6 and a little more than the minimum required for HTTP/1.1
+    * integrate and may be use as an HKP keys server (to serve OpenPGP certificates)
+    * may sign its HTTP responses using the "multipart/msigned" MIME type
+    * implement HTTP basic authentication and should soon implement HTTP OpenPGP authentication
+ see: https://raw.githubusercontent.com/Open-UDC/open-udc/master/docs/HTTP_OpenPGP_Authentication.draft.txt
+ thttpgpd was a fork/update of thttpd-2.25b.
+
+Package: ludd
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: experimental implementation of an OpenUDC node
+ OpenUDC is an experimental protocol for creating and exchanging crypto-currencies.
+ It notably permits to apply Universal monetary Dividend to the individuals that accept to use the currency.
+ It is based upon the OpenPGP protocol (RFC4880).
+ To read or contribute to the OpenUDC protocol, see:
+ https://github.com/Open-UDC/open-udc/blob/master/docs/OpenUDC_Authentication_Mechanisms.draft.txt
+ https://github.com/Open-UDC/open-udc/blob/master/docs/OpenUDC_exchange_formats.draft.txt

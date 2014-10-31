@@ -1,0 +1,5 @@
+thttpgpd (0.3.5-1) unstable; urgency=low
+
+  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- Jean Jacques BRUCKER <jeanjacquesbrucker@gmail.com>  Thu, 30 Oct 2014 18:08:31 +0100
