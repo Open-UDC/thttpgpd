@@ -35,6 +35,7 @@ LDFLAGS =	@LDFLAGS@
 LIBS =		@LIBS@
 NETLIBS =	@V_NETLIBS@
 INSTALL =	@INSTALL@
+srcdir = 	@srcdir@/
 
 #CLEANFILES =	*.o
 CLEANFILES =	
@@ -49,9 +50,9 @@ all:
 
 install:	all
 	-mkdir -p "$(UDCDIR)/parameters" "$(UDCDIR)/databases" "$(UDCDIR)/peer" "$(UDCDIR)/transactions"
-	[ -f "$(UDCDIR)/keys" ] || $(INSTALL) -m 644 keys "$(UDCDIR)"
-	[ -f "$(UDCDIR)/peers" ] || $(INSTALL) -m 644 peers "$(UDCDIR)"
-	[ -f "$(UDCDIR)/pubkeys.asc" ] || $(INSTALL) -m 444 pubkeys.asc "$(UDCDIR)"
+	[ -f "$(UDCDIR)/keys" ] || $(INSTALL) -m 644 $(srcdir)keys "$(UDCDIR)"
+	[ -f "$(UDCDIR)/peers" ] || $(INSTALL) -m 644 $(srcdir)peers "$(UDCDIR)"
+	[ -f "$(UDCDIR)/pubkeys.asc" ] || $(INSTALL) -m 444 $(srcdir)pubkeys.asc "$(UDCDIR)"
 
 uninstall:
 	rm -rf "$(UDCDIR)"

@@ -33,6 +33,7 @@ LDFLAGS =	@LDFLAGS@
 LIBS =		@LIBS@
 NETLIBS =	@V_NETLIBS@
 INSTALL =	@INSTALL@
+srcdir =        @srcdir@/
 
 CLEANFILES =	*.o cgi-lookup cgi-add
 
@@ -52,7 +53,7 @@ add:	cgi-add.o
 
 install:	all
 	-mkdir -p $(REFDIR)/$(WEBDIR)/pks
-	$(INSTALL) -b -m 444 index.html keys.jpg $(REFDIR)/$(WEBDIR)/pks
+	$(INSTALL) -b -m 444 index.html $(srcdir)keys.jpg $(REFDIR)/$(WEBDIR)/pks
 # lookup and add are now integrated inside ludd cf. file "hkp.c"
 #	$(INSTALL) cgi-add $(REFDIR)/$(WEBDIR)/pks/add
 #	$(INSTALL) cgi-lookup $(REFDIR)/$(WEBDIR)/pks/lookup

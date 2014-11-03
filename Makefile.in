@@ -40,7 +40,7 @@ MANDIR = @datarootdir@/man
 SOFTWARE = @software@
 
 # directory to store files to be copied.
-REFDIR = @datarootdir@/@software@
+REFDIR = $(DESTDIR)@datarootdir@/@software@
 
 # Pathname of directory available trough internet.
 WEBDIR = pub

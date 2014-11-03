@@ -35,16 +35,18 @@ LDFLAGS =	@LDFLAGS@
 LIBS =		@LIBS@
 NETLIBS =	@V_NETLIBS@
 INSTALL =	@INSTALL@
+srcdir =	@srcdir@/
 
 @SET_MAKE@
 
-.c.o:
+
+%.o :	$(srcdir)%.c
 	@rm -f $@
-	$(CC) $(CFLAGS) -c $*.c
+	$(CC) $(CFLAGS) -c $(srcdir)$*.c
 
-SRC =		thttpd.c libhttpd.c fdwatch.c mmc.c timers.c match.c tdate_parse.c hkp.c udc.c
+SRC =		$(srcdir)thttpd.c $(srcdir)libhttpd.c $(srcdir)fdwatch.c $(srcdir)mmc.c $(srcdir)timers.c $(srcdir)match.c $(srcdir)tdate_parse.c $(srcdir)hkp.c $(srcdir)udc.c
 
-OBJ =		$(SRC:.c=.o) @LIBOBJS@
+OBJ =		$(SRC:$(srcdir)%.c=%.o) @LIBOBJS@
 
 ALL =		@software@
 
@@ -55,21 +57,21 @@ CLEANFILES =	$(ALL) $(OBJ) $(GENSRC) $(GENHDR)
 SUBDIRS =	pks @extrasubdirs@
 
 all:		this subdirs
-this:		$(ALL)
+this:		$(GENHDR) $(ALL)
 
 @software@: $(OBJ)
 	@rm -f $@
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJ) $(LIBS) $(NETLIBS)
 
-mime_encodings.h:	mime_encodings.txt
+mime_encodings.h:	$(srcdir)mime_encodings.txt
 	rm -f mime_encodings.h
-	sed < mime_encodings.txt > mime_encodings.h \
+	sed < $(srcdir)mime_encodings.txt > mime_encodings.h \
 	  -e 's/#.*//' -e 's/[ 	]*$$//' -e '/^$$/d' \
 	  -e 's/[ 	][ 	]*/", 0, "/' -e 's/^/{ "/' -e 's/$$/", 0 },/'
 
-mime_types.h:	mime_types.txt
+mime_types.h:	$(srcdir)mime_types.txt
 	rm -f mime_types.h
-	sed < mime_types.txt > mime_types.h \
+	sed < $(srcdir)mime_types.txt > mime_types.h \
 	  -e 's/#.*//' -e 's/[ 	]*$$//' -e '/^$$/d' \
 	  -e 's/[ 	][ 	]*/", 0, "/' -e 's/^/{ "/' -e 's/$$/", 0 },/'
 
@@ -139,13 +141,3 @@ distcleansubdirs:
 	    $(MAKE) $(MFLAGS) distclean \
 	) ; done
 
-thttpd.o:	config.h version.h libhttpd.h fdwatch.h mmc.h timers.h match.h peers.h
-libhttpd.o:	config.h version.h libhttpd.h mime_encodings.h mime_types.h \
-		mmc.h timers.h match.h tdate_parse.h hkp.h udc.h
-fdwatch.o:	fdwatch.h
-mmc.o:		mmc.h libhttpd.h
-timers.o:	timers.h
-match.o:	match.h
-tdate_parse.o:	tdate_parse.h
-hkp.o:		config.h hkp.h libhttpd.h
-udc.o:		config.h udc.h libhttpd.h

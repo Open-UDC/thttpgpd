@@ -34,6 +34,7 @@ LIBS =		@LIBS@
 NETLIBS =	@V_NETLIBS@
 INSTALL =	@INSTALL@
 SOFTWARE = 	@software@
+srcdir =	@srcdir@/
 
 CLEANFILES =
 
@@ -46,8 +47,8 @@ CLEANFILES =
 all:
 
 install:	all
-	$(INSTALL) -m 444 $(SOFTWARE)_robots.txt $(REFDIR)/$(WEBDIR)/robots.txt
-	$(INSTALL) -m 444 $(SOFTWARE).ico $(REFDIR)/$(WEBDIR)/favicon.ico
+	$(INSTALL) -m 444 $(srcdir)$(SOFTWARE)_robots.txt $(REFDIR)/$(WEBDIR)/robots.txt
+	$(INSTALL) -m 444 $(srcdir)$(SOFTWARE).ico $(REFDIR)/$(WEBDIR)/favicon.ico
 
 uninstall:
 	

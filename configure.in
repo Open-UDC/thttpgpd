@@ -196,7 +196,7 @@ AC_SUBST(user)
 AC_DEFINE_UNQUOTED(DEFAULT_USER, "${user}")
 AC_SUBST(port)
 AC_DEFINE_UNQUOTED(DEFAULT_PORT, ${port})
-version=`sed -n ' s,#define.*SOFTWARE_VERSION.*"\([^"]\+\)".*,\1,p ' src/version.h`
+version=`sed -n ' s,#define.*SOFTWARE_VERSION.*"\([^"]\+\)".*,\1,p ' ${srcdir}/src/version.h`
 dnl luddversion=`grep -o 'ludd/[[^"]]\+' src/version.h`
 AC_SUBST(version)
 AC_SUBST(DEFS)

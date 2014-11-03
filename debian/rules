@@ -19,3 +19,20 @@ export DH_OPTIONS
 
 %:
 	dh $@  --with autotools-dev
+
+
+override_dh_auto_configure:
+	mkdir -p thttpgpd && cd thttpgpd && ../configure --prefix=/usr --enable-auth_basic
+	mkdir -p ludd && cd ludd && ../configure --prefix=/usr --enable-OpenUDC
+
+override_dh_auto_build:
+	dh_auto_build --builddirectory thttpgpd
+	dh_auto_build --builddirectory ludd
+
+override_dh_auto_install:
+	dh_auto_install --builddirectory thttpgpd --destdir debian/thttpgpd
+	dh_auto_install --builddirectory ludd --destdir debian/ludd
+
+override_dh_auto_clean:
+	dh_auto_clean --builddirectory thttpgpd
+	dh_auto_clean --builddirectory ludd
