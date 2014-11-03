@@ -20,6 +20,7 @@ bcpio	application/x-bcpio
 bin	application/octet-stream
 bmp	image/bmp
 cdf	application/x-netcdf
+cgi	text/plain; charset=%s
 class	application/x-java-vm
 cpio	application/x-cpio
 cpt	application/mac-compactpro
