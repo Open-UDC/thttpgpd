@@ -1,1 +1,1 @@
-tar-ignore = "scripts/lud*"
+diff-ignore = "scripts/lud.*|\...*"

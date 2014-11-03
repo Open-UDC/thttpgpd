@@ -1,6 +1,5 @@
 thttpgpd-*
 luddd-*
-tarignore
 scripts/lud*
 src/thttpgpd
 src/ludd
