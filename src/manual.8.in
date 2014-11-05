@@ -135,8 +135,9 @@ The default to try first hostname (/etc/hostname).
 The config-file option name for this flag is "ehost".
 .TP
 .B -l
-Specifies a file for logging.
+Specifies a file for logging HTTP requests.
 If no -l argument is specified, @software@ logs via syslog().
+If "-l -" is specified, @software@ output HTTP requests on STDOUT.
 If "-l /dev/null" is specified, @software@ doesn't log at all.
 The config-file option name for this flag is "logfile".
 .TP

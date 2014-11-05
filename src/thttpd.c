@@ -575,12 +575,28 @@ main( int argc, char** argv )
 
 	if ( ! debug )
 		{
-		/* We're not going to use stdin or stdout from here on, so close
-		** them to save file descriptors.
-		*/
+		int fdnull;
+		/* We're not going to use stdin, so close it to save a file descriptor.*/
 		(void) fclose( stdin );
-		if ( logfp != stdout )
+
+		if ( logfp != stdout ) {
 			(void) fclose( stdout );
+		/* We're not going to use stdout, but gpgpme will crash or behave strangely
+		** if we use it freely, so we need to make sure it point to /dev/null.
+		*/
+			fdnull=open("/dev/null", O_WRONLY);
+			if (fdnull == -1 ) {
+				syslog( LOG_CRIT, "open %.80s - %m","/dev/null");
+				exit( 1 );
+			}
+			else if (fdnull != STDOUT_FILENO) {
+				if (dup2(fdnull,STDOUT_FILENO) == -1) {
+					syslog( LOG_CRIT, "dup2 - %m");
+					exit( 1 );
+				}
+				close(fdnull);
+			}
+		}
 
 	switch ( fork() )
 			{
@@ -592,15 +608,7 @@ main( int argc, char** argv )
 			exit( 0 );
 			}
 #ifdef HAVE_SETSID
-		(void) setsid();
-#endif /* HAVE_SETSID */
-		}
-	else
-		{
-		/* Even if we don't daemonize, we still want to disown our parent
-		** process.
-		*/
-#ifdef HAVE_SETSID
+		/* disown our parent process */
 		(void) setsid();
 #endif /* HAVE_SETSID */
 		}
@@ -912,9 +920,26 @@ main( int argc, char** argv )
 				fdwatch_add_fd( hs->listen_fds[i], (void*) 0, FDW_READ );
 
 	/* We will now only use syslog if some errors happen, so close stderr */
-    warnx("started successfully ! (pid [%d], messages are now sent to syslog only)",getpid());
-	if ( ! debug )
+	if ( debug )
+		warnx("started successfully ! (pid [%d], foreground/debug mode, usable env. var.: GPGME_DEBUG )",getpid());
+	else {
+		int fdnull;
+		warnx("started successfully ! (pid [%d], messages are now sent to syslog only)",getpid());
 		fclose( stderr );
+		// Alas, gpgpme seems using STDIN, STDOUT and STDERR and will crash or behave strangely if we use them freely, so we need to make sure STDERR -> /dev/null
+		fdnull=open("/dev/null", O_WRONLY);
+		if (fdnull == -1 ) {
+			syslog( LOG_CRIT, "open %.80s - %m","/dev/null");
+			exit( 1 );
+		}
+		else if (fdnull != STDERR_FILENO) {
+			if (dup2(fdnull,STDERR_FILENO) == -1) {
+				syslog( LOG_CRIT, "dup2 - %m");
+				exit( 1 );
+			}
+			close(fdnull);
+		}
+	 }
 
 	/* Main loop. */
 	(void) gettimeofday( &tv, (struct timezone*) 0 );
@@ -1123,7 +1148,7 @@ parse_args( int argc, char** argv )
 static void
 usage( void )
 	{
-	    (void) fprintf( stderr,
+		(void) fprintf( stderr,
 			    "Usage: %s [options]\n"
 			    "Options:\n"
 			    "	-u USER     user to switch to (if started as root) - default: "DEFAULT_USER"\n"
@@ -1154,7 +1179,7 @@ usage( void )
 			    "	-E HOST     external host name or IP adress - default: default hostname\n"
 			    "	-fpr KeyID  fingerprint of the "SOFTWARE_NAME"'s OpenPGP key - no default, MANDATORY\n"
 			    "	-V          show version and exit\n"
-			    "	-D          stay in foreground\n"
+			    "	-D          stay in foreground (usefull to debug or monitor)\n"
 			, argv0, user, DEFAULT_PORT
 #if DEFAULT_CONNLIMIT > 0
 			, DEFAULT_CONNLIMIT
