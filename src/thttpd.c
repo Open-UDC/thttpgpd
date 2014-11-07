@@ -585,15 +585,11 @@ main( int argc, char** argv )
 		** if we use it freely, so we need to make sure it point to /dev/null.
 		*/
 			fdnull=open("/dev/null", O_WRONLY);
-			if (fdnull == -1 ) {
-				syslog( LOG_CRIT, "open %.80s - %m","/dev/null");
-				exit( 1 );
-			}
+			if (fdnull == -1 )
+				DIE(1, "open %.80s - %m","/dev/null");
 			else if (fdnull != STDOUT_FILENO) {
-				if (dup2(fdnull,STDOUT_FILENO) == -1) {
-					syslog( LOG_CRIT, "dup2 - %m");
-					exit( 1 );
-				}
+				syslog( LOG_WARNING, "unexpected file on fd %d",STDOUT_FILENO);
+				warnx("unexpected file on fd %d",STDOUT_FILENO);
 				close(fdnull);
 			}
 		}
@@ -928,15 +924,10 @@ main( int argc, char** argv )
 		fclose( stderr );
 		// Alas, gpgpme seems using STDIN, STDOUT and STDERR and will crash or behave strangely if we use them freely, so we need to make sure STDERR -> /dev/null
 		fdnull=open("/dev/null", O_WRONLY);
-		if (fdnull == -1 ) {
-			syslog( LOG_CRIT, "open %.80s - %m","/dev/null");
-			exit( 1 );
-		}
+		if (fdnull == -1 )
+			DIE(1, "open %.80s - %m","/dev/null");
 		else if (fdnull != STDERR_FILENO) {
-			if (dup2(fdnull,STDERR_FILENO) == -1) {
-				syslog( LOG_CRIT, "dup2 - %m");
-				exit( 1 );
-			}
+			syslog( LOG_WARNING, "unexpected file on fd %d",STDERR_FILENO);
 			close(fdnull);
 		}
 	 }
@@ -1149,43 +1140,43 @@ static void
 usage( void )
 	{
 		(void) fprintf( stderr,
-			    "Usage: %s [options]\n"
-			    "Options:\n"
-			    "	-u USER     user to switch to (if started as root) - default: "DEFAULT_USER"\n"
-			    "	-d DIR      running directory - default: %s's home or $HOME/."SOFTWARE_NAME"/\n"
-			    "	-C FILE     config file to use - default: "DEFAULT_CFILE" in running directory\n"
-			    "	-p PORT     listenning port - default: %d\n"
-			    "	-H HOST     host name or address to bind to - default: all available\n"
+				"Usage: %s [options]\n"
+				"Options:\n"
+				"	-u USER     user to switch to (if started as root) - default: "DEFAULT_USER"\n"
+				"	-d DIR      running directory - default: %s's home or $HOME/."SOFTWARE_NAME"/\n"
+				"	-C FILE     config file to use - default: "DEFAULT_CFILE" in running directory\n"
+				"	-p PORT     listenning port - default: %d\n"
+				"	-H HOST     host name or address to bind to - default: all available\n"
 #ifdef VHOSTING
-			    "	-vh         enable virtual hosting\n"
+				"	-vh         enable virtual hosting\n"
 #endif /* VHOSTING */
 #if DEFAULT_CONNLIMIT > 0
-			    "	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: %d\n"
+				"	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: %d\n"
 #else /* DEFAULT_CONNLIMIT > 0 */
-			    "	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: no limit\n"
+				"	-L LIMIT    maximum simultaneous connexion per client (if started as root) - default: no limit\n"
 #endif /* DEFAULT_CONNLIMIT > 0 */
 #ifdef CGI_PATTERN
-			    "	-c CGIPAT   pattern for CGI programs - default: "CGI_PATTERN"\n"
-			    "	-F SOCKET   Remote or \"unix:\" socket to pass fastcgi - default: fastcgi disabled\n"
+				"	-c CGIPAT   pattern for CGI programs - default: "CGI_PATTERN"\n"
+				"	-F SOCKET   Remote or \"unix:\" socket to pass fastcgi - default: fastcgi disabled\n"
 #endif /* CGI_PATTERN */
 #ifdef SIG_EXCLUDE_PATTERN
-			    "	-s SIG!PAT  pattern disabling signed responses - default: "SIG_EXCLUDE_PATTERN"\n"
+				"	-s SIG!PAT  pattern disabling signed responses - default: "SIG_EXCLUDE_PATTERN"\n"
 #endif /* SIG_EXCLUDE_PATTERN */
-			    "	-t FILE     file of throttle settings - default: no throtlling\n"
-			    "	-l LOGFILE  file for logging - default: via syslog()\n"
-			    "	-i PIDFILE  file to write the process-id to\n"
-			    "	-nk         new (unknow) keys may be added in our keyring through \"pks/add\"\n"
-			    "	-e PORT     external port (to be reach by peers) - default: listenning port\n"
-			    "	-E HOST     external host name or IP adress - default: default hostname\n"
-			    "	-fpr KeyID  fingerprint of the "SOFTWARE_NAME"'s OpenPGP key - no default, MANDATORY\n"
-			    "	-V          show version and exit\n"
-			    "	-D          stay in foreground (usefull to debug or monitor)\n"
+				"	-t FILE     file of throttle settings - default: no throtlling\n"
+				"	-l LOGFILE  file for logging - default: via syslog()\n"
+				"	-i PIDFILE  file to write the process-id to\n"
+				"	-nk         new (unknow) keys may be added in our keyring through \"pks/add\"\n"
+				"	-e PORT     external port (to be reach by peers) - default: listenning port\n"
+				"	-E HOST     external host name or IP adress - default: default hostname\n"
+				"	-fpr KeyID  fingerprint of the "SOFTWARE_NAME"'s OpenPGP key - no default, MANDATORY\n"
+				"	-V          show version and exit\n"
+				"	-D          stay in foreground (usefull to debug or monitor)\n"
 			, argv0, user, DEFAULT_PORT
 #if DEFAULT_CONNLIMIT > 0
 			, DEFAULT_CONNLIMIT
 #endif /* DEFAULT_CONNLIMIT > 0 */
 			);
-	    exit( 1 );
+		exit( 1 );
 	}
 
 /*! read_config read once a configuration file
