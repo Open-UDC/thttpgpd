@@ -576,8 +576,6 @@ main( int argc, char** argv )
 	if ( ! debug )
 		{
 		int fdnull;
-		/* We're not going to use stdin, so close it to save a file descriptor.*/
-		(void) fclose( stdin );
 
 		if ( logfp != stdout ) {
 			(void) fclose( stdout );
@@ -593,6 +591,9 @@ main( int argc, char** argv )
 				close(fdnull);
 			}
 		}
+
+		/* We're not going to use stdin, so close it to save a file descriptor.*/
+		(void) fclose( stdin );
 
 	switch ( fork() )
 			{
