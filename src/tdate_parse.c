@@ -168,7 +168,7 @@ tm_to_time( struct tm* tmP )
 
 	/* Years since epoch, converted to days. */
 	t = ( tmP->tm_year - 70 ) * 365;
-	/* Leap days for previous years. */
+	/* Leap days for previous years - this will break in 2100! */
 	t += ( tmP->tm_year - 69 ) / 4;
 	/* Days for the beginning of this month. */
 	t += monthtab[tmP->tm_mon];

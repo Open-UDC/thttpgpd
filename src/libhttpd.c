@@ -3141,6 +3141,9 @@ void httpd_parse_resp(interpose_args_t * args) {
 				case 403: title = err403title; break;
 				case 404: title = err404title; break;
 				case 408: title = httpd_err408title; break;
+				case 411: title = err411title; break;
+				case 413: title = err413title; break;
+				case 415: title = err415title; break;
 				case 500: title = err500title; break;
 				case 501: title = err501title; break;
 				case 503: title = httpd_err503title; break;

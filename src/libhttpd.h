@@ -179,21 +179,21 @@ extern hctab_t hctab;
 /* Copies and decodes a string.  It's ok for from and to to be the
 ** same string. Return the lenght of decoded string.
 */
-extern int strdecode( char* to, char* from );
+int strdecode( char* to, char* from );
 
 /* Initializes.  Does the socket(), bind(), and listen().   Returns an
 ** httpd_server* which includes a socket fd that you can select() on.
 ** Return (httpd_server*) 0 on error.
 */
-extern httpd_server* httpd_initialize( char* hostname,
+httpd_server* httpd_initialize( char* hostname,
 	unsigned short port, char* cgi_pattern, char * fastcgi_pass,
 	char* sig_pattern, int cgi_limit, char* cwd, int bfield, FILE* logfp);
 
 /* Call to shut down. */
-extern void httpd_terminate( httpd_server* hs );
+void httpd_terminate( httpd_server* hs );
 
 /* Call to unlisten/close socket(s) listening for new connections. */
-extern void httpd_unlisten( httpd_server* hs );
+void httpd_unlisten( httpd_server* hs );
 
 /* When a listen fd is ready to read, call this.  It does the accept() and
 ** returns an httpd_conn* which includes the fd to read the request from and
@@ -204,7 +204,7 @@ extern void httpd_unlisten( httpd_server* hs );
 ** The caller is also responsible for setting initialized to zero before the
 ** first call using each different httpd_conn.
 */
-extern int httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc );
+int httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc );
 #define GC_FAIL 0
 #define GC_OK 1
 #define GC_NO_MORE 2
@@ -216,7 +216,7 @@ extern int httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc );
 ** indication of whether there is no complete request yet, there is a
 ** complete request, or there won't be a valid request due to a syntax error.
 */
-extern int httpd_got_request( httpd_conn* hc );
+int httpd_got_request( httpd_conn* hc );
 #define GR_NO_REQUEST 0
 #define GR_GOT_REQUEST 1
 #define GR_BAD_REQUEST 2
@@ -226,12 +226,12 @@ extern int httpd_got_request( httpd_conn* hc );
 **
 ** Returns -1 on error.
 */
-extern int httpd_parse_request( httpd_conn* hc );
+int httpd_parse_request( httpd_conn* hc );
 
 
 /*! send_mime write HTTP header inside the hc's response buffer, and make_log_entry().
  */
-extern void send_mime( httpd_conn* hc, int status, char* title, char* encodings, char* extraheads, char* type, off_t length, time_t mod );
+void send_mime( httpd_conn* hc, int status, char* title, char* encodings, char* extraheads, char* type, off_t length, time_t mod );
 
 /* Starts sending data back to the client.  In some cases (directories,
 ** CGI programs), finishes sending by itself - in those cases, hc->file_fd
@@ -241,28 +241,28 @@ extern void send_mime( httpd_conn* hc, int status, char* title, char* encodings,
 **
 ** Returns -1 on error.
 */
-extern int httpd_start_request( httpd_conn* hc, struct timeval* nowP );
+int httpd_start_request( httpd_conn* hc, struct timeval* nowP );
 
 /* Actually sends any buffered response text. */
-extern void httpd_write_response( httpd_conn* hc );
+void httpd_write_response( httpd_conn* hc );
 
 /* Call this to close down a connection and free the data.  A fine point,
 ** if you fork() with a connection open you should still call this in the
 ** parent process - the connection will stay open in the child.
 ** If you don't have a current timeval handy just pass in 0.
 */
-extern void httpd_close_conn( httpd_conn* hc, struct timeval* nowP );
+void httpd_close_conn( httpd_conn* hc, struct timeval* nowP );
 
 /* Call this to de-initialize a connection struct and *really* free the
 ** mallocced strings.
 */
-extern void httpd_destroy_conn( httpd_conn* hc );
+void httpd_destroy_conn( httpd_conn* hc );
 
 /* parse an HTTP response from rfd, sign it eventually, and write it into socket */
 void httpd_parse_resp(interpose_args_t * args);
 
 /* Send an error message back to the client. */
-extern void httpd_send_err(
+void httpd_send_err(
 	httpd_conn* hc, int status, char* title, char* extraheads, const char* form, const char* arg );
 
 /* Some error messages. */
@@ -303,30 +303,30 @@ extern char* err501form;
 
 
 /* Generate a string representation of a method number. */
-extern char* httpd_method_str( int method );
+char* httpd_method_str( int method );
 
 /* Reallocate a string. */
-extern void httpd_realloc_str( char** strP, size_t* maxsizeP, size_t size );
+void httpd_realloc_str( char** strP, size_t* maxsizeP, size_t size );
 
 /* Format a network socket to a string representation. */
-extern char * get_ip_str(const struct sockaddr * sa);
+char * get_ip_str(const struct sockaddr * sa);
 
 /* Set NDELAY mode on a socket. */
-extern int httpd_set_ndelay( int fd );
+int httpd_set_ndelay( int fd );
 
 /* Clear NDELAY mode on a socket. */
-extern int httpd_clear_ndelay( int fd );
+int httpd_clear_ndelay( int fd );
 
 /* Read the requested buffer completely, accounting for interruptions. */
-extern ssize_t httpd_read_fully( int fd, void* buf, size_t nbytes );
+ssize_t httpd_read_fully( int fd, void* buf, size_t nbytes );
 
 /* Write the requested buffer completely, accounting for interruptions. */
-extern ssize_t httpd_write_fully( int fd, const void* buf, size_t nbytes );
+ssize_t httpd_write_fully( int fd, const void* buf, size_t nbytes );
 
 /* Generate debugging statistics syslog message. */
-extern void httpd_logstats( long secs );
+void httpd_logstats( long secs );
 
-extern int httpd_dprintf( int fd, const char* format, ... );
+int httpd_dprintf( int fd, const char* format, ... );
 
 /* Allocate and generate a random string of size len (from charset [G-Vg-v]) */
 char * random_boundary(char * buff, unsigned short len);
