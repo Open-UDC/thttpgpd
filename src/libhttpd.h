@@ -117,7 +117,6 @@ typedef struct {
 	time_t if_modified_since, range_if;
 	ssize_t contentlength; /* maybe use off_t to be able to make bigger POST on 32-bits archs ? */
 	char* type;				/* not malloc()ed */
-	char* hostname;		/* not malloc()ed */
 	int http_version;   /* default: 10 for HTTP/1.0, 11 means HTTP/1.1 or better */ 
 	char * bytesranges;  /* used to manage multi-range */ 
 	off_t first_byte_index, last_byte_index;

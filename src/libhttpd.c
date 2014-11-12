@@ -1436,7 +1436,6 @@ httpd_get_conn( httpd_server* hs, int listen_fd, httpd_conn* hc )
 	hc->range_if = (time_t) -1;
 	hc->contentlength = -1;
 	hc->type = "";
-	hc->hostname = (char*) 0;
 	hc->http_version=10;
 	hc->first_byte_index = 0;
 	hc->last_byte_index = -1;
@@ -1973,7 +1972,7 @@ httpd_parse_request( httpd_conn* hc )
 	/*if ( hc->expnfilename[0] == '~' )
 		{}*/
 
-	//syslog( LOG_INFO, "hc->realfilename: %s", hc->realfilename ); // hc->realfilename should be null
+	//syslog( LOG_DEBUG, "hc->realfilename: %s", hc->realfilename ); // hc->realfilename should be null
 #ifdef VHOSTING
 	/* Virtual host mapping ("el cheapo"). */
 	/* We differ a little bit from specification (http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.2):
@@ -2015,7 +2014,7 @@ httpd_parse_request( httpd_conn* hc )
 				toexpand=hc->tmpbuff;
 
 			} else if ( errno != ENOENT )
-				syslog( LOG_ERR, "vhost stat %.80s - %m", hostdir );
+				syslog( LOG_DEBUG, "vhost stat %.80s - %m", hostdir );
 
 			/* Re-display port number if given */
 			if ( cp != (char*) 0 )
@@ -2347,7 +2346,7 @@ static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 	httpd_conn** tmphcs;
 
 	++hc->hs->cgi_count;
-	syslog( LOG_INFO, "%s spawned %s process %d for '%.200s'", hc->client_addr, type, pid, hc->origfilename);
+	syslog( LOG_DEBUG, "%s spawned %s process %d for '%.200s'", hc->client_addr, type, pid, hc->origfilename);
 
 	/* set the process group id to a new one for hard killing of all the process group (cgi_kill2,...)) */
 	if (setpgid(pid,0)) {
@@ -3582,7 +3581,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 	if ( ! ( hc->sb.st_mode & ( S_IROTH | S_IXOTH ) ) )
 		{
 		syslog(
-			LOG_INFO,
+			LOG_DEBUG,
 			"%.80s URL \"%.80s\" resolves to a non world-readable file",
 			hc->client_addr, hc->encodedurl );
 		httpd_send_err(
@@ -3653,7 +3652,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 		if ( ! ( hc->sb.st_mode & S_IROTH ) )
 			{
 			syslog(
-				LOG_INFO,
+				LOG_DEBUG,
 				"%.80s URL \"%.80s\" tried to index a directory with indexing disabled",
 				hc->client_addr, hc->encodedurl );
 			httpd_send_err(
@@ -3667,7 +3666,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 		return launch_process(ls, hc, METHOD_HEAD | METHOD_GET, "indexing");
 #else /* GENERATE_INDEXES */
 		syslog(
-			LOG_INFO, "%.80s URL \"%.80s\" tried to index a directory",
+			LOG_DEBUG, "%.80s URL \"%.80s\" tried to index a directory",
 			hc->client_addr, hc->encodedurl );
 		httpd_send_err(
 			hc, 403, err403title, "",
@@ -3713,7 +3712,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 		if ( ! ( hc->sb.st_mode & ( S_IROTH | S_IXOTH ) ) )
 			{
 			syslog(
-				LOG_INFO,
+				LOG_DEBUG,
 				"%.80s URL \"%.80s\" resolves to a non-world-readable index file",
 				hc->client_addr, hc->encodedurl );
 			httpd_send_err(
@@ -3727,7 +3726,7 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 	else if ( ! S_ISREG(hc->sb.st_mode) )
 		{
 		syslog(
-			LOG_INFO,
+			LOG_DEBUG,
 			"%.80s URL \"%.80s\" doesn't resolves to a regular file or a directory.",
 			hc->client_addr, hc->encodedurl );
 		httpd_send_err(
