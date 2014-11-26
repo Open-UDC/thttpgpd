@@ -88,8 +88,11 @@ dnl Most operating systems have gethostbyname() in the default searched
 dnl libraries (i.e. libc):
 dnl
 V_NETLIBS=""
-AC_CHECK_FUNC(getaddrinfo)
-AC_CHECK_FUNC(socket bind listen inet_ntop)
+save_LIBS="$LIBS"
+AC_SEARCH_LIBS(socket, [network socket])
+AC_SEARCH_LIBS(getaddrinfo, [nsl network socket])
+V_NETLIBS="$LIBS"
+LIBS="$save_LIBS"
 
 AC_CHECK_LIB(inet6, main)
 AC_CHECK_LIB(gpgme-pthread, gpgme_check_version,,AC_MSG_ERROR("libgpgme-pthread.so missing (or incorrect)."))
