@@ -93,7 +93,7 @@ AC_CHECK_FUNC(socket bind listen inet_ntop)
 
 AC_CHECK_LIB(inet6, main)
 AC_CHECK_LIB(gpgme-pthread, gpgme_check_version,,AC_MSG_ERROR("libgpgme-pthread.so missing (or incorrect)."))
-AC_CHECK_LIB(pthread, sem_open,,AC_MSG_ERROR("libpthread.so missing (or incorrect)."))
+AC_SEARCH_LIBS(sem_open,pthread,,AC_MSG_ERROR("sem_open() (pthread) missing (or incorrect)."))
 
 AC_CHECK_FUNC(crypt, , AC_CHECK_LIB(crypt, crypt))
 AC_CHECK_FUNC(hstrerror, ,
