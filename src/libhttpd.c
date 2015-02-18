@@ -4118,7 +4118,7 @@ char *random_boundary(char * buff, unsigned short len) {
 	}
 	for(q=buff; len; len--, q++) {
 		//*q=(char) (rand()%2?rand()%16+103:rand()%16+71) ;
-		*q=(char) (rand()%2?(rand()+(unsigned int)buff)%16+103:rand()%16+71) ;
+		*q=(char) (rand()%2?(rand()+(uintptr_t)buff)%16+103:rand()%16+71) ;
 	}
 	return buff;
 }

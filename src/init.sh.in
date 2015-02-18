@@ -11,7 +11,7 @@ CURRENCY="@currency@"
 
 helpmsg='Usage: '"${0##*/}"' [options]
 Options:
-	-d, --dir	directory (default: $HOME of user '"$LUDDUSER"' if root, or $HOME/.'"$SOFTWARE"' if not).
+	-d, --dir	directory (default: '"$LUDDUSER_HOMEDIR"' if root, or $HOME/.'"$SOFTWARE"' if not).
 	-h, --help	this help
 	-V, --version	version'
 
@@ -91,13 +91,7 @@ if (($(id -u))) ; then
 	dir="$HOME/.$SOFTWARE"
 else
 	isroot=1
-	dir=$(grep "^"$LUDDUSER":" /etc/passwd | cut -d ":" -f 6)
-	if [[ ! "$dir" ]] ; then
-		useradd -r -m -c "system user for $SOFTWARE" -d "$LUDDUSER_HOMEDIR" -s /sbin/nologin $LUDDUSER || exit 1
-		chown -R $LUDDUSER "$LUDDUSER_HOMEDIR" || exit 1
-		dir=$(grep "^"$LUDDUSER":" /etc/passwd | cut -d ":" -f 6)
-		[[ ! "$dir" ]] && exit 1
-	fi
+	dir="$LUDDUSER_HOMEDIR"
 fi
 
 for ((i=0;$#;)) ; do
@@ -109,6 +103,19 @@ for ((i=0;$#;)) ; do
 	esac
 	shift
 done
+
+mkdir -p "$dir" || exit 1
+if ((isroot)) ; then
+	dir_e=$(grep "^"$LUDDUSER":" /etc/passwd | cut -d ":" -f 6)
+	if [[ "$dir_e" ]] ; then
+		if [[ "$dir_e" != $dir ]] ; then
+			echo "${0##*/}: Warning: /etc/passwd: user $LUDDUSER already exist with different homedir ($dir_e)" >&2
+		fi
+	else
+		useradd -r -m -c "system user for $SOFTWARE" -d "$dir" -s /sbin/nologin $LUDDUSER || exit 1
+		chown -R $LUDDUSER "$dir" || exit 1
+	fi
+fi
 
 if [ -d "$dir/pub" -o -d "$dir/sigcache" -o -d "$dir/gpgme" ] ; then
 	read -p "Warning: $dir already contain some expected data. Do you really want to (re)init data in ? (y/n) " answer
