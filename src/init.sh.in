@@ -104,7 +104,6 @@ for ((i=0;$#;)) ; do
 	shift
 done
 
-mkdir -p "$dir" || exit 1
 if ((isroot)) ; then
 	dir_e=$(grep "^"$LUDDUSER":" /etc/passwd | cut -d ":" -f 6)
 	if [[ "$dir_e" ]] ; then
@@ -116,6 +115,7 @@ if ((isroot)) ; then
 		chown -R $LUDDUSER "$dir" || exit 1
 	fi
 fi
+mkdir -p "$dir" || exit 1
 
 if [ -d "$dir/pub" -o -d "$dir/sigcache" -o -d "$dir/gpgme" ] ; then
 	read -p "Warning: $dir already contain some expected data. Do you really want to (re)init data in ? (y/n) " answer
