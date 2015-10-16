@@ -111,6 +111,7 @@ if ((isroot)) ; then
 			echo "${0##*/}: Warning: /etc/passwd: user $LUDDUSER already exist with different homedir ($dir_e)" >&2
 		fi
 	else
+        mkdir -p "$(dirname "$dir")" || exit 1
 		useradd -r -m -c "system user for $SOFTWARE" -d "$dir" -s /sbin/nologin $LUDDUSER || exit 1
 		chown -R $LUDDUSER "$dir" || exit 1
 	fi
