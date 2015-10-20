@@ -179,6 +179,7 @@ extern hctab_t hctab;
 ** same string. Return the lenght of decoded string.
 */
 int strdecode( char* to, char* from );
+int strdecodequery( char* to, char* from );
 
 /* Initializes.  Does the socket(), bind(), and listen().   Returns an
 ** httpd_server* which includes a socket fd that you can select() on.

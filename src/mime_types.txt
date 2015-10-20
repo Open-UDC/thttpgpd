@@ -28,6 +28,7 @@ crl	application/x-pkcs7-crl
 crt	application/x-x509-ca-cert
 csh	application/x-csh
 css	text/css; charset=%s
+deb application/x-debian-package
 dcr	application/x-director
 dir	application/x-director
 djv	image/vnd.djvu

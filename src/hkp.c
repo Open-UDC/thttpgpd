@@ -128,7 +128,7 @@ void hkp_add( httpd_conn* hc ) {
 
 	if (!strncmp(buff,"keytext=",8)) {
 		int r;
-		r=strdecode(buff,buff+8);
+		r=strdecodequery(buff,buff+8);
 		//gpgme_set_armor(gpglctx,1);
 		gpgerr = gpgme_data_new_from_mem(&gpgdata,buff,r,0);
 	} else {
@@ -325,7 +325,7 @@ void hkp_lookup( httpd_conn* hc ) {
 	} else {
 		for (i=0;i<nsearchs;i++) {
 			if ( (searchdec[i]=malloc(strlen(search[i])*sizeof(char)+1)) ) 
-				strdecode(searchdec[i],search[i]);
+				strdecodequery(searchdec[i],search[i]);
 			else {
 				httpd_send_err(hc, 500, err500title, "", err500form, "m" );
 				exit(EXIT_FAILURE);

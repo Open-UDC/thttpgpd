@@ -1093,6 +1093,22 @@ int strdecode( char* to, char* from ) {
 	int a,b,r;
 	for ( r=0 ; *from != '\0'; to++, from++, r++ ) {
 		if ( from[0] == '%' && (a=hexit(from[1])) >= 0 && (b=hexit(from[2])) >= 0 ) {
+		    *to = a* 16 + b;
+			from += 2;
+		} else
+			*to = *from;
+	}
+	*to = '\0';
+	return r;
+}
+
+/* Copies and decodes a query string.  It's ok for 'from' and 'to' to be the
+** same string. Return the lenght of decoded string.
+*/
+int strdecodequery( char* to, char* from ) {
+	int a,b,r;
+	for ( r=0 ; *from != '\0'; to++, from++, r++ ) {
+		if ( from[0] == '%' && (a=hexit(from[1])) >= 0 && (b=hexit(from[2])) >= 0 ) {
 			*to = a* 16 + b;
 			from += 2;
 		} else if ( from[0] == '+' )
@@ -2842,7 +2858,8 @@ make_argp( httpd_conn* hc )
 				cp1 = cp2 + 1;
 				}
 			}
-		if ( cp2 != cp1 )
+        /* for the last str without '+' */
+		if ( cp2 != cp1 ) /* if client forge a request ending with some '+' don't care of it */
 			{
 			strdecode( cp1, cp1 );
 			argp[argn++] = cp1;
