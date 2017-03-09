@@ -2419,6 +2419,7 @@ static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 
 /*! child_r_start should be call early by the child handling the request */
 static void child_r_start(httpd_conn* hc) {
+	int s=1;
 
 	httpd_unlisten( hc->hs ); 
 
@@ -2449,6 +2450,10 @@ static void child_r_start(httpd_conn* hc) {
 	/* Set priority. */
 	(void) nice( CGI_NICE );
 #endif /* CGI_NICE */
+
+	/* activate TCP_NODELAY for CGI and spawned process (cf. man 7 tcp) */
+	if ( setsockopt(hc->conn_fd, IPPROTO_TCP, TCP_NODELAY, (char*) &s, sizeof(s) ) < 0 )
+		syslog( LOG_WARNING, "setsockopt TCP_NODELAY - %m");
 }
 
 /*
@@ -2978,8 +2983,8 @@ static int mk_path(const char * path) {
 			return -1;
 		}
 		*cp='/';
-		//while (*cp == '/') /* Usefull ?? depend how stat manage mutiple ///// ... */
-		cp++;
+		while (*cp == '/') /* in case of mutiple ///// ... */
+			cp++;
 		cp=strchr(cp,'/');
 	}
 	free(dir);

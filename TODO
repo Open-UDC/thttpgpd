@@ -38,7 +38,9 @@ SIGHUP log re-opening doesn't work if you started as root.
 Change redirect to put the Refresh command in the HTTP headers, instead of
 a META tag.
 
-Add TCP_NODELAY, but after CGIs get spawned.
+Better manage TCP_NODELAY fo CGIs and spawned process (make it configurable ?) .
+cf: * http://stackoverflow.com/questions/3761276/when-should-i-use-tcp-nodelay-and-when-tcp-cork
+    * https://t37.net/optimisations-nginx-bien-comprendre-sendfile-tcp-nodelay-et-tcp-nopush.html
 
 Add stat cache?  1 minute expiry?
 

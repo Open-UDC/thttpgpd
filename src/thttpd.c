@@ -498,7 +498,7 @@ main( int argc, char** argv )
 	if ( chdir( dir ) < 0 )
 		DIE(1,"chdir %.80s - %m %s",dir,"(forget "SOFTWARE_NAME"_init.sh ?)");
 
-	if (read_config(DEFAULT_CFILE) < 2)
+	if ( read_config(DEFAULT_CFILE) < 2 )
 		/* if read_config does something: re-parse args which override it */
 		parse_args( argc, argv );
 

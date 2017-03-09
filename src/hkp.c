@@ -213,7 +213,8 @@ void hkp_add( httpd_conn* hc ) {
 	}
 	httpd_write_fully( hc->conn_fd, buff,MIN(r,buffsize));
 
-	gpgme_release (gpglctx);
+	close(hc->conn_fd);
+	gpgme_release(gpglctx);
 	exit(EXIT_SUCCESS);
 
 	/* TODO:
