@@ -51,6 +51,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h> /* for uintptr_t */
 #include <string.h>
 #include <syslog.h>
 #include <unistd.h>
