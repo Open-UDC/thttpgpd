@@ -72,8 +72,9 @@ function ludd_genbotkey {
 		esac
 	done
 
-
-	cat << EOF | gpg --command-fd 0 --status-file /dev/null --allow-freeform-uid --gen-key --no-use-agent 2> /dev/null
+	case "$(gpg --version | awk '{ print substr($3,1,1) ; exit }')" in
+	1)
+			cat << EOF | gpg --command-fd 0 --status-file /dev/null --allow-freeform-uid --gen-key --no-use-agent <<<"$input" 2> /dev/null
 4
 
 8y
@@ -83,6 +84,23 @@ ubot1;$myudid
 
 
 EOF
+                ;;
+	2)
+			gpg --batch --generate-key --passphrase "" --pinentry-mode loopback <( echo "     %echo Generating a default key
+     Key-Type: default
+     Name-Real: $mname
+     Name-Comment: ubot1;$myudid
+     Name-Email: $email
+     Expire-Date: 8y
+     # Do a commit here, so that we can later print "done" :-)
+     %commit
+     %echo done")
+                ;;
+	*)
+		echo "$FUNCNAME: Error: Unhandled $(gpg --version | head -1)" >&2
+		return  100
+		;;
+	esac
 
 return $?
 }
