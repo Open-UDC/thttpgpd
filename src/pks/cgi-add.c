@@ -47,7 +47,7 @@ static int hexit( char c ) {
 		return(c - 'a' + 10);
 	if ( c >= 'A' && c <= 'F' )
 		return(c - 'A' + 10);
-	return(-1);	
+	return(-1);
 }
 
 /* Copies and decodes a string.  It's ok for from and to to be the
@@ -77,7 +77,7 @@ static char * get_starting_comment(char * ud, gpgme_key_t gkey) {
 	n=strlen(ud);
 	gpguids=gkey->uids;
 	while (gpguids) {
-		if (!strncmp(gpguids->comment,ud,n)) 
+		if (!strncmp(gpguids->comment,ud,n))
 			return gpguids->comment;
 		gpguids=gpguids->next;
 	}
@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
 		}
 		gpgikey=gpgikey->next;
 	}
-		   			   
+
 
 	http_header(rcode);
 	printf("<html><head><title>%d keys sended </title></head><body><h2>Total: %d<br>imported: %d<br>unchanged: %d<br>no_user_id: %d<br>new_user_ids: %d<br>new_sub_keys: %d<br>new_signatures: %d<br>new_revocations: %d<br>secret_read: %d<br>not_imported: %d</h2></body></html>", gpgimport->considered, gpgimport->considered, gpgimport->imported, gpgimport->unchanged, gpgimport->no_user_id, gpgimport->new_user_ids, gpgimport->new_sub_keys, gpgimport->new_signatures, gpgimport->new_revocations, gpgimport->secret_read, gpgimport->not_imported);
@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
 
 	/* TODO:
 	 *  Note in memory the fpr in gpgme_import_status_t of all keys imported to :
-	 *  - clean them (remove previous or useless signatures).  
+	 *  - clean them (remove previous or useless signatures).
 	 *  - revoke the one with with an usable secret key.
 	 *  - propagate them to other ludd key server.
 	 * DONE:

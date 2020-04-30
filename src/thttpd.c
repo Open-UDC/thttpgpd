@@ -258,13 +258,13 @@ handle_chld( int sig )
 
 		/* Note 1: here may happen a minor race bug :
 		 * child may be killed earlier and following code which unset hctab.hcs[pid-hctab.pidmin]
-		 * may happen BEFORE we set it. 
+		 * may happen BEFORE we set it.
 		 * In such case shut_down() may try to kill an incorrect pid - Few chances that such pid
 		 * rely on an killable existing process (remind also that thttpd/ludd don't stay as root). */
 		if ( pid>=hctab.pidmin && pid<hctab.pidmax )
 			/* Note 2 : here we can't no more use the hc pointer because it should have been freed */
 			hctab.hcs[pid-hctab.pidmin]=(httpd_conn *)0;
-		
+
 		/* Decrement the CGI count.  Note that this is not accurate, since
 		** each CGI can involve two or even three child processes.
 		** Decrementing for each child means that when there is heavy CGI
@@ -384,7 +384,7 @@ handle_bus( int sig )
 
 	/* Just set a flag that we got the signal. */
 	got_bus = 1;
-	
+
 	/* Restore previous errno. */
 	errno = oerrno;
 }
@@ -419,7 +419,7 @@ re_open_logfile( void )
 				return;
 				}
 			}
-		
+
 		//logfp = freopen( logfile, "a", hs->logfp ); // Strange: this keep the fd with glibc-2.14.1-10.mga2 (32 bits) but doesn't with glibc-2.13-38 (debian, amd64) ...
 		logfp = fdopen( logfd, "a");
 		if ( logfp == (FILE*) 0 )
@@ -467,7 +467,7 @@ main( int argc, char** argv )
 	/* "hc[pid]" */
 	hctab.pidmin=getpid()+1;
 	hctab.pidmax=hctab.pidmin+128;
-	hctab.hcs=calloc((hctab.pidmax-hctab.pidmin),sizeof(httpd_conn *)); 
+	hctab.hcs=calloc((hctab.pidmax-hctab.pidmin),sizeof(httpd_conn *));
 	if (! hctab.hcs )
 		DIE( 1, "out of memory allocating %s", "hctab" );
 
@@ -485,7 +485,7 @@ main( int argc, char** argv )
 
 	/* Switch directory : the one in parameters, or the $HOME of the user(setuid) if root, or $HOME/.@software@  */
 	if ( dir == (char*) 0 ) {
-		if ( getuid() == 0 ) 
+		if ( getuid() == 0 )
 			dir=(pwd->pw_dir?pwd->pw_dir:".");
 		else {
 			dir=NEW(char,strlen(pwd->pw_dir)+3+strlen(argv0));
@@ -786,7 +786,7 @@ main( int argc, char** argv )
 	/* Check gpgme version ( http://www.gnupg.org/documentation/manuals/gpgme/Library-Version-Check.html )*/
 	setlocale(LC_ALL, "");
 	if ( ! gpgme_check_version(GPGME_VERSION_MIN) ) {
-		syslog( LOG_WARNING,"gpgme library (%s) is older than required (%s), bug may settle...",gpgme_check_version(0),GPGME_VERSION_MIN); 
+		syslog( LOG_WARNING,"gpgme library (%s) is older than required (%s), bug may settle...",gpgme_check_version(0),GPGME_VERSION_MIN);
 		warnx("gpgme library (%s) is older than required (%s), bug may settle...",gpgme_check_version(0),GPGME_VERSION_MIN);
 	}
 	gpgme_set_locale (NULL, LC_CTYPE, setlocale (LC_CTYPE, NULL));
@@ -819,7 +819,7 @@ main( int argc, char** argv )
 		DIE(1,gpgme_strerror(gpgerr));
 
 	/* get the bot  key */
-	if ( ! myself.fpr || strlen(myself.fpr) < 8 ) 
+	if ( ! myself.fpr || strlen(myself.fpr) < 8 )
 		DIE( 1, "Invalid fingerprint %s","(forget "SOFTWARE_NAME"_init.sh ?)");
 
 	gpgerr = gpgme_get_key (main_gpgctx,myself.fpr,&mygpgkey,1);
@@ -1033,7 +1033,7 @@ parse_args( int argc, char** argv )
 	argn = 1;
 	while ( argn < argc && argv[argn][0] == '-' )
 		{
-		if ( !strcmp( argv[argn], "-V" ) || !strcmp( argv[argn], "--version" ) ) 
+		if ( !strcmp( argv[argn], "-V" ) || !strcmp( argv[argn], "--version" ) )
 			{
 			(void) printf( "%s\n", SOFTWARE_NAME"/"SOFTWARE_VERSION );
 			exit( 0 );

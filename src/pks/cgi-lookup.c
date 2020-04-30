@@ -142,13 +142,13 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if ( ! search ) { 
+	if ( ! search ) {
 		/* (mandatory parameter) */
 		http_header(500,CTYPE_HTML_STR);
 		printf("<html><head><title>Error handling request</title></head><body><h1>Error handling request: Missing \"search\" parameter in \"%s\".</h1></body></html>",getenv("QUERY_STRING"));
 		return 1;
 	} else {
-		if (searchdec=malloc(strlen(search)*sizeof(char)+1)) 
+		if (searchdec=malloc(strlen(search)*sizeof(char)+1))
 			strdecode(searchdec,search);
 		else {
 			http_header(500,CTYPE_HTML_STR);
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
 		} else {
 			http_header(200,CTYPE_HTML_STR);
 			printf("<html><head><title>ludd Public Key Server -- Get: %s</title></head><body><h1>Public Key Server -- Get: %s</h1><pre>",search,search);
-			fwrite(buff, sizeof(char),read_bytes,stdout); /* Now it's too late to test fwrite return value ;-) */ 
+			fwrite(buff, sizeof(char),read_bytes,stdout); /* Now it's too late to test fwrite return value ;-) */
 			while ( (read_bytes = gpgme_data_read (gpgdata, buff, BUFFSIZE)) > 0 )
 				fwrite(buff, sizeof(char),read_bytes,stdout);
 			printf("\n</pre></body></html>");

@@ -9,7 +9,7 @@
 
 #include <time.h>
 
-typedef enum { 
+typedef enum {
 	PEER_STATUS_UNKNOW,
 	PEER_STATUS_DEAD,
 	PEER_STATUS_INIT,
@@ -17,7 +17,7 @@ typedef enum {
 } peer_status_t;
 
 typedef struct {
-	unsigned int csetmin; 
+	unsigned int csetmin;
 	unsigned int csetmax;
 } csetrange_t;
 

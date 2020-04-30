@@ -391,7 +391,7 @@ kqueue_check_fd( int fd )
 		syslog( LOG_ERR, "bad ridx (%d) in kqueue_check_fd!", ridx );
 		return 0;
 		}
-	if ( ridx >= nreturned ) 
+	if ( ridx >= nreturned )
 		return 0;
 	if ( kqrevents[ridx].ident != fd )
 		return 0;

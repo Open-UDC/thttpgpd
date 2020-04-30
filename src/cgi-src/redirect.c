@@ -120,7 +120,7 @@ The requested filename, %s, has moved to a new URL:\n\
 <A HREF=\"%s\">%s</A>.\n\
 </BODY></HTML>\n", url, title, title, script_name, url, url );
     }
-	
+
 
 int
 main( int argc, char** argv )

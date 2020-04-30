@@ -86,7 +86,7 @@ Enable a basic virtual hosting (see below).
 The config-file option name for this flag is "vhost".
 .TP
 .B -L
-Specifies the number of maximum simultaneous connexion per client (ip). 
+Specifies the number of maximum simultaneous connexion per client (ip).
 This use the external tool iptables (which have to be in your $PATH and need
 the root privileges).
 If @software@ isn't started as root or if connlimit is not a positive number,
@@ -453,7 +453,7 @@ Catalin Ionescu, and Craig Leres (for not complaining about coding style very mu
 .PP
 And many thanks to people in or around OpenUDC adventure : Stephane Laborde (Galuel),
 Emmanuel Charpentier (echarp), Caner Candan, Michele Bini (Rev22), Cedric Moreau (cgeek),
-pierro, ... (sorry for the forgotten ones :-] ) 
+pierro, ... (sorry for the forgotten ones :-] )
 .SH AUTHOR
 Copyright \[co] 2012-2014 by Jean-Jacques Brucker <open-udc@googlegroups.com>.
 .nf

@@ -129,7 +129,7 @@ typedef int socklen_t;
 struct fp2fd_gpg_data_handle {
 	FILE * fpin;
 	int fdout;
-}; 
+};
 
 /* Forwards. */
 static void free_httpd_server( httpd_server* hs );
@@ -245,7 +245,7 @@ httpd_server* httpd_initialize( char* hostname, unsigned short port,
 	if ( fastcgi_pass == (char*) 0 )
 		hs->fastcgi_saddr = (struct sockaddr *) 0;
 	/* else ... */
-		
+
 	if ( sig_pattern == (char*) 0 )
 		hs->sig_pattern = (char*) 0;
 	else
@@ -350,7 +350,7 @@ static int init_listen_sockets(const char * hostname, unsigned short port, int *
 		}
 
 		/* Set non-blocking mode (CRITICAL) */
-		if ( httpd_set_ndelay( listen_fds[i] ) < 0 ) { 
+		if ( httpd_set_ndelay( listen_fds[i] ) < 0 ) {
 			char * str=get_ip_str(rp->ai_addr);
 			syslog( LOG_CRIT, "httpd_set_ndelay [%.80s]:%.80s - %m", str, service );
 			free(str);
@@ -884,7 +884,7 @@ auth_check( httpd_conn* hc)
 		&authpath, &maxauthpath, strlen( dirname ) + 1 + sizeof(AUTH_FILE) );
 	(void) snprintf( authpath, maxauthpath, "%s/%s", dirname, AUTH_FILE );
 
-			
+
 	/* Does this directory have an auth file? */
 	if ( stat( authpath, &sb ) < 0 )
 		/* Nope, let the request go through. */
@@ -900,7 +900,7 @@ auth_check( httpd_conn* hc)
 		}
 
 	/* Is it the authorization file ? */
-	if ( !S_ISDIR(hc->sb.st_mode) && 
+	if ( !S_ISDIR(hc->sb.st_mode) &&
 			(!strcmp( hc->realfilename, AUTH_FILE ) /* for the root directory */
 			|| !strcmp(hc->realfilename, authpath) ) )
 		{
@@ -913,12 +913,12 @@ auth_check( httpd_conn* hc)
 			ERROR_FORM( err403form, "The requested URL '%.80s' is an authorization file, retrieving it is not permitted.\n" ), hc->encodedurl );
 		return -1;
 		}
-	/* Note : Jef's code for previous test was not bad : 
+	/* Note : Jef's code for previous test was not bad :
 	if ( expnlen == sizeof(AUTH_FILE)-1 &&  strcmp( hc->expnfilename, AUTH_FILE ) == 0 )
 	else if ( expnlen >= sizeof(AUTH_FILE) &&
 			  strcmp( &(hc->expnfilename[expnlen - sizeof(AUTH_FILE) + 1]), AUTH_FILE ) == 0 &&
 			  hc->expnfilename[expnlen - sizeof(AUTH_FILE)] == '/' ) */
-	
+
 
 	/* Decode it. */
 	l = b64_decode(
@@ -1084,7 +1084,7 @@ static int hexit( char c ) {
 		return c - 'a' + 10;
 	if ( c >= 'A' && c <= 'F' )
 		return c - 'A' + 10;
-	return -1;	
+	return -1;
 }
 
 /* Copies and decodes a string.  It's ok for 'from' and 'to' to be the
@@ -1876,7 +1876,7 @@ httpd_parse_request( httpd_conn* hc )
 					else
 						hc->bytesranges = cp;
 					}
-					
+
 				}
 			else if ( strncasecmp( buf, "If-Range:", 9 ) == 0 )
 				{
@@ -2049,7 +2049,7 @@ httpd_parse_request( httpd_conn* hc )
 	*/
 	if ( hc->realfilename ) {
 		size_t cwdlen=strlen( hc->hs->cwd );
-		if ( strncmp(hc->realfilename, hc->hs->cwd, cwdlen -1) == 0 
+		if ( strncmp(hc->realfilename, hc->hs->cwd, cwdlen -1) == 0
 				&& ( hc->realfilename[cwdlen-1]=='\0' || hc->realfilename[cwdlen-1]=='/' ) )
 			{
 				if (hc->realfilename[cwdlen-1]=='\0') /* if realpath() behave differently on differeny platforms: || ( hc->realfilename[cwdlen-1]=='/' && hc->realfilename[cwdlen]=='\0' ) */
@@ -2422,7 +2422,7 @@ static void drop_child(const char * type,pid_t pid,httpd_conn* hc) {
 static void child_r_start(httpd_conn* hc) {
 	int s=1;
 
-	httpd_unlisten( hc->hs ); 
+	httpd_unlisten( hc->hs );
 
 	/* set signals to default behavior. */
 #ifdef HAVE_SIGSET
@@ -3107,7 +3107,7 @@ void httpd_parse_resp(interpose_args_t * args) {
 				/* if output is not signed while it was asked, we will do it */
 				do_sign=1;
 		}
-		
+
 		if ( !strncasecmp( buf, "Content-",8 ) ) {
 			if (! (c_headers[n_c_headers]=strdup(buf)) ) {
 				syslog( LOG_ERR, "strdup - %m");
@@ -3124,7 +3124,7 @@ void httpd_parse_resp(interpose_args_t * args) {
 			n_o_headers=MIN(HTTP_MAX_HEADERS-2,n_o_headers+1); /* Keep 1 slot empty to eventually insert "HTTP/..." */
 		}
 	}
-	
+
 	/* If there were no "Content-*:" headers, bail. */
 	if ( !c_headers[0] ) {
 		syslog( LOG_ERR, "no header (%d)",optcgi);
@@ -3181,7 +3181,7 @@ void httpd_parse_resp(interpose_args_t * args) {
 			syslog( LOG_ERR,"too big cache path - %s",hc->realfilename);
 		} else if (!(hc->bfield & HC_GOT_RANGE)){
 			use_cache=2; /* by default: do the cache */
-			if ( stat(fcache,&sts) == 0 ) { 
+			if ( stat(fcache,&sts) == 0 ) {
 				if ( ! S_ISREG(sts.st_mode) ) {
 					/* May happen ... */
 					remove(fcache);
@@ -3212,8 +3212,8 @@ void httpd_parse_resp(interpose_args_t * args) {
 			gpg_data_release_cb						/* release method */
 		};
 		struct fp2fd_gpg_data_handle cb_handle = {
-			fp,				/* fp in */
-			args->wfd     		/* fd out */
+			fp,			/* fp in */
+			args->wfd		/* fd out */
 		};
 
 		if (!bound) {
@@ -3223,7 +3223,7 @@ void httpd_parse_resp(interpose_args_t * args) {
 		}
 
 		gpgerr = gpgme_data_new_from_cbs(&gpgdata, &gpgcbs,&cb_handle);
-		if (gpgerr == GPG_ERR_NO_ERROR) 
+		if (gpgerr == GPG_ERR_NO_ERROR)
 			gpgerr = gpgme_data_new(&gpgsig);
 
 		if ( gpgerr != GPG_ERR_NO_ERROR) {
@@ -3287,12 +3287,12 @@ void httpd_parse_resp(interpose_args_t * args) {
 		if ( gpgerr == GPG_ERR_NO_ERROR) {
 			off_t siglen;
 			FILE * sigfile;
-			if (use_cache==1) 
+			if (use_cache==1)
 				siglen=sts.st_size;
 			else {
 				siglen=gpgme_data_seek(gpgsig, 0, SEEK_END);
 				gpgme_data_seek(gpgsig, 0, SEEK_SET);
-			}	
+			}
 			r=snprintf(buf,buflen, "\015\012--%s\015\012%s %s\015\012%s %d\015\012\015\012",bound,"Content-Type:","application/pgp-signature","Content-Length:",(int) siglen);
 			r=MIN(r,buflen);
 			if (httpd_write_fully(args->wfd,buf,r) !=r ) {
@@ -3303,13 +3303,13 @@ void httpd_parse_resp(interpose_args_t * args) {
 			if (use_cache==2) {
 			/* (Try to) Cache the signature */
 				if ( mk_path(fcache) == 0 && (sigfile=fopen(fcache,"w")) ) {
-			   		while ( (r=gpgme_data_read(gpgsig, buf, buflen)) > 0 )
+					while ( (r=gpgme_data_read(gpgsig, buf, buflen)) > 0 )
 						if (fwrite(buf,sizeof(char),r,sigfile) != r) {
 						   unlink(fcache);
-					   	   break;
-						}	   
+						   break;
+						}
 					fclose(sigfile);
-					gpgme_data_seek(gpgsig, 0, SEEK_SET);	
+					gpgme_data_seek(gpgsig, 0, SEEK_SET);
 				}
 			}
 
@@ -3359,7 +3359,7 @@ void httpd_parse_resp(interpose_args_t * args) {
 			}
 		}
 		httpd_write_fully(args->wfd,"\015\012",2);
-	
+
 		/* Echo the rest of the output. */
 		for (;;) {
 			r = fread(buf,sizeof(char), buflen-1,fp );
@@ -3414,7 +3414,7 @@ cgi_child( httpd_conn* hc ) {
 	** All others will be closed on exec.
 	** Note: if syslog use stdin,stdout or stderr, it will be closed. But it should use a fd > 2 since it was open before to close them in thttpd.c.
 	*/
-	
+
 	if ( dup2(hc->conn_fd,STDIN_FILENO) < 0
 			|| dup2(hc->conn_fd,STDOUT_FILENO) < 0
 			|| dup2(hc->conn_fd,STDERR_FILENO) < 0 ) {
@@ -3759,13 +3759,13 @@ httpd_start_request( httpd_conn* hc, struct timeval* nowP ) {
 		return -1;
 		}
 
-	/* If it's world executable and not in the CGI area, or if there's 
+	/* If it's world executable and not in the CGI area, or if there's
 	** pathinfo, someone's trying to either serve or run a non-CGI
 	** file as CGI.  Either case is prohibited.
 	*/
 	if ( hc->sb.st_mode & S_IXOTH )
-		{	
-		if ( hc->hs->cgi_pattern != (char*) 0 
+		{
+		if ( hc->hs->cgi_pattern != (char*) 0
 		&& match( hc->hs->cgi_pattern, hc->realfilename ) )
 		    return launch_process(cgi_child, hc, METHOD_HEAD | METHOD_GET | METHOD_POST, "CGI");
 		else
@@ -4016,7 +4016,7 @@ int httpd_dprintf( int fd, const char* format, ... ) {
 	va_list ap;
 	int r;
 	char * buf=malloc(MAXPATHLEN);
-	
+
 	if (!buf)
 		return(-1);
 
@@ -4067,7 +4067,7 @@ httpd_read_fully( int fd, void* buf, size_t nbytes )
 			nanosleep(&tim, NULL);
 			continue;
 			}
-		if ( r < 0 ) 
+		if ( r < 0 )
 			{
 			syslog( LOG_ERR, "httpd_read_fully - %d - %m", r );
 			return r;
@@ -4091,7 +4091,7 @@ ssize_t httpd_write_fully( int fd, const void* buf, size_t nbytes ) {
 		ssize_t r;
 
 		r = write( fd, (char*) buf + nwritten, nbytes - nwritten );
-		if ( r < 0 && ( errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK ) ) { /* should only happen when O_NONBLOCK is set */ 
+		if ( r < 0 && ( errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK ) ) { /* should only happen when O_NONBLOCK is set */
 			struct timespec tim={0, 50000000}; /* 50 ms */
 			nanosleep(&tim, NULL);
 			continue;

@@ -34,7 +34,7 @@ struct gpgdata4export_handle {
 	httpd_conn* hc;
 	int nsearchs;
 	char ** searchs;
-}; 
+};
 
 static int export_start=0; /* set to 1 once by gpgdata4export_cb(...) */
 
@@ -72,7 +72,7 @@ void hkp_add( httpd_conn* hc ) {
 	gpgme_import_result_t gpgimport=NULL;
 	gpgme_import_status_t gpgikey=NULL;
 	gpgme_key_t gpgkey=NULL;
-#ifdef CHECK_UDID2 
+#ifdef CHECK_UDID2
 	char * uid2=NULL;
 #endif
 
@@ -221,8 +221,6 @@ void hkp_add( httpd_conn* hc ) {
 	 *  Note in memory the fpr in gpgme_import_status_t of all keys imported to :
 	 *  - revoke the one with with an usable secret key.
 	 *  - propagate them to other ludd key server.
-	 * DONE:
-	 *  - check if they correspond to our policy (newkeys option -nk, udid2 ...)
 	 */
 
 }
@@ -319,13 +317,13 @@ void hkp_lookup( httpd_conn* hc ) {
 		}
 	}
 
-	if ( ! search[0] ) { 
+	if ( ! search[0] ) {
 		/* (mandatory parameter) */
 		httpd_send_err(hc, 400, httpd_err400title, "", "Missing a \"search\" value in the query.</h1></body></html>","");
 		exit(EXIT_SUCCESS);
 	} else {
 		for (i=0;i<nsearchs;i++) {
-			if ( (searchdec[i]=malloc(strlen(search[i])*sizeof(char)+1)) ) 
+			if ( (searchdec[i]=malloc(strlen(search[i])*sizeof(char)+1)) )
 				strdecodequery(searchdec[i],search[i]);
 			else {
 				httpd_send_err(hc, 500, err500title, "", err500form, "m" );
@@ -374,14 +372,14 @@ void hkp_lookup( httpd_conn* hc ) {
 			exit(EXIT_FAILURE);
 		}
 	}
-	
+
 	if (!strcmp(op, "get")) {
 		gpgme_data_t gpgdata;
 		struct gpgme_data_cbs gpgcbs = {
-			NULL,									/* read method */
+			NULL,						/* read method */
 			(gpgme_data_write_cb_t) gpgdata4export_cb,	/* write method */
-			NULL,									/* seek method */
-			gpg_data_release_cb						/* release method */
+			NULL,						/* seek method */
+			gpg_data_release_cb				/* release method */
 		};
 		struct gpgdata4export_handle cb_handle = {
 			hc,

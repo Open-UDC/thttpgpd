@@ -20,7 +20,7 @@ enum {
 	FPR_LVL_DELETE = 1 , /* Reserved for Futur Use */
 	FPR_LVL_REJECTED = 2, /* Reserved for Futur Use */
 	FPR_LVL_ACTIVE = 3,
-	FPR_LVL_ALIVE = 4, 
+	FPR_LVL_ALIVE = 4,
 	FPR_LVL_ADMIN = 5
 };
 

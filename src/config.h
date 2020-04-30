@@ -139,7 +139,7 @@
  */
 #define SIG_CACHEDIR "sigcache"
 
-/* CONFIGURE: Maximum number of simultaneous connexion per client (ip). 
+/* CONFIGURE: Maximum number of simultaneous connexion per client (ip).
  * This use external tool iptables (which have to be in your $PATH and
  * need the root privileges).
  * If this is defined to zero or less, no system("iptables...") calls
@@ -209,13 +209,13 @@
  *
  * If you undefine this then ludd will not implement OpenPGP POST authentication
  * at all and will not check for such files, which saves a bit of CPU time.
- * NOTE: That feature is not priority for external cgi. But we use a similar mechanism 
+ * NOTE: That feature is not priority for external cgi. But we use a similar mechanism
  * for udc/create or udc/validate.
 */
 //#define PGPAUTH_FILE ".htPOSTpgp"
 
 /* CONFIGURE: This is required for OpenUDC compatibility : it checks that your bot
- * certificate contain a valid udid2. 
+ * certificate contain a valid udid2.
  * (ie: "udid2;c;[A-Z]\{1,20\};[A-Z-]\{1,20\};[0-9-]\{10\};[0-9.e+-]\{14\};[0-9]\+" )
  * Note: If -nk is passed, which means new keys are accepted through pks/add, it will
  * also check that they contain a valid udid2 or ubot1.

@@ -270,7 +270,7 @@ void udc_create( httpd_conn* hc ) {
 	gpgme_ctx_t gpglctx;
 	gpgme_error_t gpgerr;
 	gpgme_verify_result_t result;
-	
+
 	char * buff;
 
 	if ( strncasecmp( hc->contenttype, "multipart/msigned", sizeof("multipart/msigned")-1 ) ) {

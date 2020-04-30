@@ -145,14 +145,14 @@ if [ -d "$dir/pub" -o -d "$dir/sigcache" -o -d "$dir/gpgme" ] ; then
 fi
 
 # To avoid wrinting "|| exit 1 ..."
-set -e 
+set -e
 
 mkdir -pv  "$dir/gpgme" "$dir/sigcache" "$dir/pub"
 
 if [[ "$dir" != "$refdir" ]] ; then
 	cp -avf "$refdir/pub/pks" "$dir/pub/"
 	cp -av "$refdir/pub/favicon.ico" "$refdir/pub/robots.txt" "$dir/pub/" || true
-	if [ "$CURRENCY" ] ; then 
+	if [ "$CURRENCY" ] ; then
 		cp -avf "$refdir/pub/udid2" "$dir/pub/"
 		mkdir -p "$dir/pub/udc/$CURRENCY"
 		cp -avf "$refdir/pub/udc/$CURRENCY/keys" "$refdir/pub/udc/$CURRENCY/peers" "$dir/pub/udc/$CURRENCY/"
@@ -172,7 +172,7 @@ echo "NOTE: passphrase to cypher bot's private key is unsupported yet".
 ludd_chooseinlist "bot key to use ?" 1 "create a new one" "${mybotkeys[@]}"
 
 bki=$?
-case $bki in 
+case $bki in
 	0)
 		exit
 		;;
@@ -203,7 +203,7 @@ gpg --keyserver "$KEYSERVER" --search-keys "$myudid" #2> /dev/null
 gpg --export "($myudid" | gpg --import --homedir "$dir/gpgme" 2> /dev/null
 gpg --export-secret-keys "${mybotkeys[$bki]}" | gpg --import --homedir "$dir/gpgme" 2> /dev/null
 
-# If present in the refdir, import some pubkeys (eg. init keys) to the keyring 
+# If present in the refdir, import some pubkeys (eg. init keys) to the keyring
 [ "$CURRENCY" ] && gpg --import --homedir "$dir/gpgme" 2> /dev/null < "$refdir/pub/udc/$CURRENCY/pubkeys.asc"
 
 if ((isroot)) ; then
@@ -227,13 +227,13 @@ EOF
 fi
 chmod go+r "$dir/gpgme/gpg.conf"
 
-while true ; do 
+while true ; do
 	read -p "External host name or addr [$(hostname)] ? " myhost
 	[ "$myhost" ] || myhost="$(hostname)"
 	host "$myhost" && break
 done
 
-while true ; do 
+while true ; do
 	read -p "port number to listen and to be reach externally [@port@] ? " myport
 	[ "$myport" ] || myport=@port@
 	((myport)) && break
@@ -279,7 +279,7 @@ port=$myport
 # unknow  keys  in  your keyring, you shouldn't use this.
 #newkeys
 
-# The number of maximum simulateous connexion per client (ip). 
+# The number of maximum simulateous connexion per client (ip).
 # This use external tool iptables (which have to be in your \$PATH and need
 # the root privileges).
 # If $SOFTWARE isn't started as root or if connlimit is not a positive number,
@@ -338,7 +338,7 @@ case "$answer" in
 	Y* | y* | O* | o* )
 		[ -x /etc/init.d/$SOFTWARE ] && /etc/init.d/$SOFTWARE start || $SOFTWARE ;;
 	*)
-		echo -e "Ok, you may start it later using:\n\t$ $SOFTWARE" 
+		echo -e "Ok, you may start it later using:\n\t$ $SOFTWARE"
 		[ -x /etc/init.d/$SOFTWARE ] &&
 			echo -e "or\t# /etc/init.d/$SOFTWARE start (as root user)"
 esac

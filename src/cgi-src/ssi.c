@@ -549,7 +549,7 @@ parse( char* vfilename, char* filename, FILE* fp, char* str )
 	if ( ntags < sizeof(tags)/sizeof(*tags) )
 	    tags[ntags++] = cp;
 	}
-    
+
     if ( strcmp( directive, "config" ) == 0 )
 	dirn = DI_CONFIG;
     else if ( strcmp( directive, "include" ) == 0 )

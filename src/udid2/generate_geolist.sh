@@ -4,7 +4,7 @@
 # For example few populations are well known in Ukraina, so we need to comment
 # the population filter ; also during the communism, only the region of birth
 # was registered, so we need to add regions (A) in the fclass filter.
-# Sometime also, it is more accurate to use admin2 instead of admin1 (example: Italia) 
+# Sometime also, it is more accurate to use admin2 instead of admin1 (example: Italia)
 
 #cd "$TMPDIR" || cd "$TMP" || exit
 

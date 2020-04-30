@@ -2,7 +2,7 @@
 export LANG=C
 
 function urldec {
-while ((i<$1)) ; do 
+while ((i<$1)) ; do
 	read -t 1 -N 1 encoded
 	if [[ "$encoded" == % ]] ; then
 		read -t 1 -N 2 encoded
