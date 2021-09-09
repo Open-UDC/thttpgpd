@@ -42,15 +42,27 @@ function ludd_chooseinlist {
 	return $ret
 }
 
+function ludd_validateudid {
+	if [[ "$1" =~ ^udid2\;c\;[A-Z]{1,20}\;[A-Z-]{1,20}\;[0-9-]{10}\;[0-9.e+-]{14}\;[0-9]+ ]] ; then
+		echo "${BASH_REMATCH[0]}"
+		return 0
+	elif [[ "$1" =~ ^(udid[34]).([A-Za-Z0-9_-]{22}e[_-][0-9]{2}\.[0-9]{2}[_-][01][0-9]{2}\.[0-9]{2}) ]] ; then
+		echo "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+		return 0
+	else
+		echo "Warning: this id ($1) does not begin with valid udid" >&2
+		echo "$1"
+		return 1
+	fi
+}
+
 function ludd_genbotkey {
 	for ((;;)) ; do
 		for ((;;)) ; do
-			read -p "What is ur id (udid2;c;...) ? " myudid
-			if grep "^udid2;c;[A-Z]\{1,20\};[A-Z-]\{1,20\};[0-9-]\{10\};[0-9.e+-]\{14\};[0-9]\+;\?$" <(echo $myudid) > /dev/null ; then
-				myudid=${myudid%;} #remove last ';' if present.
-				break;
+			read -p "What is ur id (udid...) ? " myudid
+			if myudid="$(ludd_validateudid "$myudid")" ; then
+				break
 			else
-				echo "Warning: this id ($myudid) is not a valid udid2" >&2
 				[ "$CURRENCY" ] || break;
 			fi
 		done
@@ -185,17 +197,16 @@ case $bki in
 		((bki-=2))
 esac
 
-myudid="$(gpg --list-secret-keys --with-colons ${mybotkeys[$bki]} | sed -n ' s/^\(uid\|sec\):.*(ubot1;\(udid2;c;[A-Z]\{1,20\};[A-Z-]\{1,20\};[0-9-]\{10\};[0-9.e+-]\{14\};[0-9]\+\);\?).*/\2/p ' )"
-if [ -z "$myudid" ] ; then
-    if [ "$CURRENCY" ] ; then
-		echo "Error: key ${mybotkeys[$bki]} doesn't contain a valid udid2" >&2
+myudid="$(gpg --list-secret-keys --with-colons ${mybotkeys[$bki]} | sed -n ' s/^\(uid\|sec\):.*(ubot1;\([^)]\+\).*/\2/p ' )"
+if ! myudid="$(ludd_validateudid "$myudid")" ; then
+	if [ "$CURRENCY" ] ; then
+		echo "Error: key ${mybotkeys[$bki]} doesn't contain a valid udid" >&2
 		exit 3
 	else
-		echo "Warning: key ${mybotkeys[$bki]} doesn't contain a valid udid2" >&2
+		echo "Warning: key ${mybotkeys[$bki]} doesn't contain a valid udid" >&2
 	fi
-	myudid="$(gpg --list-secret-keys --with-colons ${mybotkeys[$bki]} | sed -n ' s/^sec:.*(ubot1;\([^)]\+\).*/\1/p ' )"
-	[ -z "$myudid" ] && exit 3
 fi
+[ "$myudid" ] || exit 3
 
 # Export ubot1 key and owner's key to the keyring.
 echo "Your own (personnal) certificate ?"
@@ -336,9 +347,7 @@ read -p "	Start $SOFTWARE now ? (y/n) " answer
 echo
 case "$answer" in
 	Y* | y* | O* | o* )
-		[ -x /etc/init.d/$SOFTWARE ] && /etc/init.d/$SOFTWARE start || $SOFTWARE ;;
+		$SOFTWARE -d "$dir" ;;
 	*)
-		echo -e "Ok, you may start it later using:\n\t$ $SOFTWARE"
-		[ -x /etc/init.d/$SOFTWARE ] &&
-			echo -e "or\t# /etc/init.d/$SOFTWARE start (as root user)"
+		echo -e "Ok, you may start it later using:\n\t$ $SOFTWARE [-d \"$dir\"]"
 esac
