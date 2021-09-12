@@ -347,7 +347,7 @@ read -p "	Start $SOFTWARE now ? (y/n) " answer
 echo
 case "$answer" in
 	Y* | y* | O* | o* )
-		$SOFTWARE -d "$dir" ;;
+		"@exec_prefix@/@bindir@/$SOFTWARE" -d "$dir" ;;
 	*)
 		echo -e "Ok, you may start it later using:\n\t$ $SOFTWARE [-d \"$dir\"]"
 esac
