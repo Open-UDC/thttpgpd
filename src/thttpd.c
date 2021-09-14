@@ -890,8 +890,8 @@ main( int argc, char** argv )
 		}
 
 		if (! found) {
-			warnx("Certificate isn't signed by it's owner... gonna be rejected by peers");
-			syslog(LOG_WARNING,"Certificate isn't signed by it's owner... gonna be rejected by peers");
+			warnx(SOFTWARE_NAME" certificate isn't certified by it's human owner... (=> "SOFTWARE_NAME" signatures are useless)");
+			syslog(LOG_WARNING,SOFTWARE_NAME" certificate isn't certified by it's human owner... (=> "SOFTWARE_NAME" signatures are useless)");
 		}
 	}
 
