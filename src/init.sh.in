@@ -5,7 +5,8 @@ SOFTWARE="@software@"
 LUDDVERSION="@software@/@version@"
 prefix="@prefix@" # weirdo requirement for some autotool variables
 LUDDUSER_HOMEDIR="@localstatedir@/@software@"
-KEYSERVER="hkp://pool.sks-keyservers.net"
+#KEYSERVER="hkp://pool.sks-keyservers.net"
+KEYSERVER="keys.openpgp.org"
 refdir="@datarootdir@/@software@"
 CURRENCY="@currency@"
 
@@ -208,10 +209,10 @@ if ! myudid="$(ludd_validateudid "$myudid")" ; then
 fi
 [ "$myudid" ] || exit 3
 
-# Export ubot1 key and owner's key to the keyring.
-echo "Your own (personnal) certificate ?"
-gpg --keyserver "$KEYSERVER" --search-keys "$myudid" #2> /dev/null
-gpg --export "($myudid" | gpg --import --homedir "$dir/gpgme" 2> /dev/null
+# Export ubot1 key to the keyring.
+#echo "Your own (personnal) certificate ?"
+#gpg --keyserver "$KEYSERVER" --search-keys "$myudid" #2> /dev/null
+#gpg --export "($myudid" | gpg --import --homedir "$dir/gpgme" 2> /dev/null
 gpg --export-secret-keys "${mybotkeys[$bki]}" | gpg --import --homedir "$dir/gpgme" 2> /dev/null
 
 # If present in the refdir, import some pubkeys (eg. init keys) to the keyring
@@ -232,7 +233,7 @@ if ! grep "$LUDDVERSION ###" "$dir/gpgme/gpg.conf" > /dev/null 2>&1 ; then
 
 # keyserver to use for retrieving new keys from creation sheet.
 # Note: if the server doesn't answer, $SOFTWARE may instead request some peers before to fail.
-keyserver $KEYSERVER
+#keyserver $KEYSERVER
 
 EOF
 fi
