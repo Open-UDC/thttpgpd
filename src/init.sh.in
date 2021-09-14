@@ -239,12 +239,6 @@ fi
 chmod go+r "$dir/gpgme/gpg.conf"
 
 while true ; do
-	read -p "External host name or addr [$(hostname)] ? " myhost
-	[ "$myhost" ] || myhost="$(hostname)"
-	host "$myhost" && break
-done
-
-while true ; do
 	read -p "port number to listen and to be reach externally [@port@] ? " myport
 	[ "$myport" ] || myport=@port@
 	((myport)) && break
@@ -271,7 +265,7 @@ fpr=${mybotkeys[$bki]}
 eport=$myport
 
 # Specifies the external host name (or host adress) to reach us.
-ehost=$myhost
+#ehost=$(hostname)
 
 # Specifies an alternate port number to listen on.
 port=$myport
