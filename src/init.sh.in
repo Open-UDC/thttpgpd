@@ -12,9 +12,10 @@ CURRENCY="@currency@"
 
 helpmsg='Usage: '"${0##*/}"' [options]
 Options:
-	-d, --dir	directory (default: '"$LUDDUSER_HOMEDIR"' if root, or $HOME/.'"$SOFTWARE"' if not).
-	-h, --help	this help
-	-V, --version	version'
+    -d, --dir DIRECTORY  directory (default: '"$LUDDUSER_HOMEDIR"' if root, or $HOME/.'"$SOFTWARE"' if not).
+    -s, --start          also start '"$SOFTWARE"'
+    -h, --help           this help
+    -V, --version        version'
 
 function ludd_chooseinlist {
 # Argument 1: Prompt before the list
@@ -128,6 +129,7 @@ fi
 for ((i=0;$#;)) ; do
 	case "$1" in
 		-d|--dir*) shift; dir="$1" ;;
+		-s|--start) DOSTARTSERVER="true" ;;
 		-h|--h*) echo "$helpmsg" ; exit 2 ;;
 		-V|--vers*) echo "$LUDDVERSION" ; exit 2 ;;
 		*) echo "Error: Unrecognized option $1"; echo "$helpmsg" ; exit 2 ;;
@@ -257,7 +259,7 @@ cat << EOF > "$SOFTWARE.conf"
 
 # Specifies an alternate homedir for $SOFTWARE.
 # Note: this is ignored for the default config file, which is found in the homedir ! :-D
-#dir=/var/$SOFTWARE
+dir=$(readlink -f "$dir")
 
 # Specifies the fingerprint of the (secret) key to use for signing.
 fpr=${mybotkeys[$bki]}
@@ -328,6 +330,17 @@ port=$myport
 
 EOF
 
+if [[ "$DOSTARTSERVER" == true ]] ; then
+		echo -e "\nStarting @exec_prefix@/@bindir@/$SOFTWARE -d $dir ..."
+		"@exec_prefix@/@bindir@/$SOFTWARE" -d "$dir"
+else
+		echo -e "$dir/$SOFTWARE.conf has been successfully generated."\
+			"\n\nYou now may start $SOFTWARE using:"\
+			"\n\t$ @exec_prefix@/@bindir@/$SOFTWARE -d \"$dir\""\
+			"\nOr:"\
+			"\n\t$ @exec_prefix@/@bindir@/$SOFTWARE -C \"$dir/$SOFTWARE.conf\""
+fi
+
 cat << EOF
 
 NOTE: your bot's certificate have to be signed with your own OpenPGP certificate.
@@ -338,11 +351,3 @@ NOTE: your bot's certificate have to be signed with your own OpenPGP certificate
 
 EOF
 
-read -p "	Start $SOFTWARE now ? (y/n) " answer
-echo
-case "$answer" in
-	Y* | y* | O* | o* )
-		"@exec_prefix@/@bindir@/$SOFTWARE" -d "$dir" ;;
-	*)
-		echo -e "Ok, you may start it later using:\n\t$ $SOFTWARE [-d \"$dir\"]"
-esac
